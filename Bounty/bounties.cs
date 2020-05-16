@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using static Oxide.Plugins.GUICreator;
 
 namespace Oxide.Plugins
 {
@@ -24,6 +25,10 @@ namespace Oxide.Plugins
 
         DynamicConfigFile bountyDataFile;
         BountyData bountyData;
+        #endregion
+
+        #region references
+        private GUICreator guiCreator;
         #endregion
 
         #region classes
@@ -153,6 +158,13 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(messages, this);
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
+
+            guiCreator = (GUICreator)Manager.GetPlugin("GUICreator");
+            if (guiCreator == null)
+            {
+                Puts("GUICreator missing! This shouldn't happen");
+                return;
+            }
         }
 
         object OnServerCommand(ConsoleSystem.Arg arg)
