@@ -24,7 +24,9 @@ namespace Oxide.Plugins
         }
 
         DynamicConfigFile bountyDataFile;
+        DynamicConfigFile huntDataFile;
         BountyData bountyData;
+        HuntData huntData;
         #endregion
 
         #region references
@@ -131,9 +133,30 @@ namespace Oxide.Plugins
 
             public BasePlayer target => BasePlayer.FindByID(bounty.targetID);
 
+            public TimeSpan remaining 
+            { 
+                get
+                {
+                    TimeSpan duration = new TimeSpan(0, 0, config.huntDuration);
+                    TimeSpan elapsed = DateTime.Now.Subtract(timestamp);
+                    return duration - elapsed;
+                } 
+            }
+
             public Timer huntTimer;
 
-            public Hunt() { }
+            public Timer ticker;
+
+            public Hunt() 
+            {
+                TimeSpan remainingCache = remaining;
+                if (remainingCache <= TimeSpan.Zero) end();
+                else
+                {
+                    huntTimer = Instance.timer.Once((float)remainingCache.TotalSeconds, () => end());
+                    ticker = Instance.timer.Every(1, () => tick());
+                }
+            }
 
             public Hunt(Bounty bounty, BasePlayer hunter)
             {
@@ -141,6 +164,25 @@ namespace Oxide.Plugins
                 this.bounty = bounty;
                 hunterID = hunter.userID;
                 hunterName = hunter.displayName;
+                huntTimer = Instance.timer.Once((float)config.huntDuration, () => end());
+                ticker = Instance.timer.Every(1, () => tick());
+            }
+
+            public void tick()
+            {
+
+            }
+
+            public void end()
+            {
+#if DEBUG
+                Instance.PrintToChat($"ending hunt {hunterName} -> {bounty.targetName}");
+#endif
+                //announcement
+                //return item
+                huntTimer.Destroy();
+                ticker.Destroy();
+                Instance.huntData.removeHunt(this);
             }
         }
 
@@ -151,7 +193,9 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission("bounties.use", this);
             bountyDataFile = Interface.Oxide.DataFileSystem.GetFile("bounties/Bounties");
-            loadData();
+            huntDataFile = Interface.Oxide.DataFileSystem.GetFile("bounties/Hunts");
+            loadBountyData();
+            loadHuntData();
         }
 
         void Loaded()
@@ -234,6 +278,26 @@ namespace Oxide.Plugins
             //display tooltip "put the bounty into your hotbar and select it to start hunting"
             return null;
         }
+
+        private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
+        {
+            if (oldItem.info.shortname == "note" && oldItem.HasFlag(global::Item.Flag.OnFire))
+            {
+                Bounty bounty = bountyData.GetBounty(oldItem.uid);
+                if(bounty != null)
+                {
+                    closeBounty(player);
+                }
+            }
+            if (newItem.info.shortname == "note" && newItem.HasFlag(global::Item.Flag.OnFire))
+            {
+                Bounty bounty = bountyData.GetBounty(oldItem.uid);
+                if (bounty != null)
+                {
+                    sendBounty(player, bounty);
+                }
+            }
+        }
         #endregion
 
         #region commands
@@ -293,8 +357,9 @@ namespace Oxide.Plugins
 
         }
 
-        public void sendHuntPrompt(BasePlayer player, Bounty bounty)
+        public void closeBounty(BasePlayer player)
         {
+            //for bounty and creator
 
         }
 
@@ -306,6 +371,11 @@ namespace Oxide.Plugins
         public void sendTargetIndicator(BasePlayer player, Bounty bounty)
         {
 
+        }
+
+        public void closeIndicators(BasePlayer player)
+        {
+            
         }
 
         #endregion
@@ -354,21 +424,14 @@ namespace Oxide.Plugins
         #endregion
 
         #region data management
+
+        #region BountyData
+
         private class BountyData
         {
-            public List<Hunt> hunts = new List<Hunt>();
             public Dictionary<uint, Bounty> bounties = new Dictionary<uint, Bounty>();
 
             public BountyData() { }
-
-            public void AddBounty(Bounty bounty)
-            {
-                bounties.Add(bounty.noteUid, bounty);
-                Instance.saveData();
-#if DEBUG
-                Instance.PrintToChat($"added Bounty {bounty.placerName} -> {bounty.targetName} {bounty.rewardAmount} to data");
-#endif
-            }
 
             public Bounty GetBounty(uint itemID)
             {
@@ -376,17 +439,26 @@ namespace Oxide.Plugins
                 return bounties[itemID];
             }
 
+            public void AddBounty(Bounty bounty)
+            {
+                bounties.Add(bounty.noteUid, bounty);
+                Instance.saveBountyData();
+#if DEBUG
+                Instance.PrintToChat($"added Bounty {bounty.placerName} -> {bounty.targetName} {bounty.rewardAmount} to data");
+#endif
+            }
+
             public void removeBounty(uint itemID)
             {
                 bounties.Remove(itemID);
-                Instance.saveData();
+                Instance.saveBountyData();
 #if DEBUG
                 Instance.PrintToChat($"removed Bounty {itemID} from data");
 #endif
             }
         }
 
-        void saveData()
+        void saveBountyData()
         {
             try
             {
@@ -398,7 +470,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void loadData()
+        void loadBountyData()
         {
             try
             {
@@ -409,6 +481,61 @@ namespace Oxide.Plugins
                 Puts(E.ToString());
             }
         }
+
+        #endregion
+
+        #region HuntData
+
+        private class HuntData
+        {
+            public List<Hunt> hunts = new List<Hunt>();
+
+            public HuntData() { }
+
+            public Hunt getHunt(Bounty bounty)
+            {
+                return hunts.Where((h) => h.bounty == bounty).First();
+            }
+
+            public void addHunt(Hunt hunt)
+            {
+                hunts.Add(hunt);
+                Instance.saveHuntData();
+            }
+
+            public void removeHunt(Hunt hunt)
+            {
+                hunts.Remove(hunt);
+                Instance.saveHuntData();
+            }
+        }
+
+        void saveHuntData()
+        {
+            try
+            {
+                bountyDataFile.WriteObject(bountyData);
+            }
+            catch (Exception E)
+            {
+                Puts(E.ToString());
+            }
+        }
+
+        void loadHuntData()
+        {
+            try
+            {
+                bountyData = bountyDataFile.ReadObject<BountyData>();
+            }
+            catch (Exception E)
+            {
+                Puts(E.ToString());
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region Config
