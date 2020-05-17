@@ -2,15 +2,16 @@
 
 #define DEBUG
 
+using Facepunch;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Configuration;
-using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using VLB;
 using static Oxide.Plugins.GUICreator;
 
 namespace Oxide.Plugins
@@ -34,8 +35,6 @@ namespace Oxide.Plugins
         #endregion
 
         #region references
-        [PluginReference]
-        private Plugin Grid;
 
         private GUICreator guiCreator;
         #endregion
@@ -87,7 +86,7 @@ namespace Oxide.Plugins
                 get
                 {
                     ItemDefinition itemDef = ItemManager.FindItemDefinition(config.currency);
-                    return string.Format(Instance.lang.GetMessage("bountyText", Instance), targetName, reason ?? $"disrespecting {placerName}", $"{rewardAmount} {itemDef?.displayName?.english ?? "$"}");
+                    return string.Format(Instance.lang.GetMessage("bountyText", Instance), targetName, reason ?? $"disrespecting {placerName}", $"{rewardAmount} {itemDef?.displayName?.english ?? "$"}", Instance.getGrid(target.transform.position), Instance.wearing(target), Instance.armedWith(target));
                 }
             }
 
@@ -104,7 +103,7 @@ namespace Oxide.Plugins
                 ItemDefinition itemDef = ItemManager.FindItemDefinition("note");
                 Item item = ItemManager.Create(itemDef, 1);
                 item.SetFlag(global::Item.Flag.OnFire, true);
-                item.text = $"{this.text}\n{Instance.lastSeen(target)}";
+                item.text = text;
                 item.name = "Bounty";
                 placer.GiveItem(item);
 
@@ -209,6 +208,7 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(messages, this);
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
+            cmd.AddChatCommand("test", this, nameof(testCommand));
 
             guiCreator = (GUICreator)Manager.GetPlugin("GUICreator");
             if (guiCreator == null)
@@ -353,6 +353,11 @@ namespace Oxide.Plugins
                     break;
             }
         }
+
+        private void testCommand(BasePlayer player, string command, string[] args)
+        {
+            player.ChatMessage(armedWith(player));
+        }
         #endregion
 
         #region UI
@@ -402,20 +407,63 @@ namespace Oxide.Plugins
             string grid = getGrid(player.transform.position);
             if (!string.IsNullOrEmpty(grid)) sb.Append($"in {grid} ");
             sb.Append("wearing: ");
-            int i = 1;
-            foreach(Item item in player.inventory.containerWear.itemList)
+            if (player.inventory.containerWear.itemList.Count == 0) sb.Append("nothing");
+            else
             {
-                sb.Append($"{item.info.displayName.english}");
-                if (i != player.inventory.containerWear.itemList.Count) sb.Append(", ");
-                i++;
+                int i = 1;
+                foreach (Item item in player.inventory.containerWear.itemList)
+                {
+                    sb.Append($"{item.info.displayName.english}");
+                    if (i != player.inventory.containerWear.itemList.Count) sb.Append(", ");
+                    i++;
+                }
             }
             return sb.ToString();
         }
 
-        public string getGrid(Vector3 position)
+        public string wearing(BasePlayer player)
         {
-            if (Grid == null) return null;
-            return (string)Grid.Call("getGrid", position);
+            StringBuilder sb = new StringBuilder();
+            if (player.inventory.containerWear.itemList.Count == 0) sb.Append("nothing");
+            else
+            {
+                int i = 1;
+                foreach (Item item in player.inventory.containerWear.itemList)
+                {
+                    sb.Append($"{item.info.displayName.english}");
+                    if (i != player.inventory.containerWear.itemList.Count) sb.Append(", ");
+                    i++;
+                }
+            }
+            return sb.ToString();
+        }
+
+        public string armedWith(BasePlayer player)
+        {
+            StringBuilder sb = new StringBuilder();
+            List<HeldEntity> heldEntities = new List<HeldEntity>();
+            foreach(Item item in player.inventory.containerBelt.itemList.Concat(player.inventory.containerMain.itemList))
+            {
+                if (!item.info.isHoldable || item.GetHeldEntity() == null) continue;
+                heldEntities.Add(item.GetHeldEntity() as HeldEntity);
+            }
+            if (heldEntities.Count == 0) sb.Append("unarmed");
+            else if (heldEntities.Count == 1) sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+            else
+            {
+                heldEntities = (from x in heldEntities orderby x.hostileScore descending select x).ToList();
+                sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+            }
+            return sb.ToString();
+        }
+
+        string getGrid(Vector3 pos)
+        {
+            char letter = 'A';
+            var x = Mathf.Floor((pos.x + (ConVar.Server.worldsize / 2)) / 146.3f) % 26;
+            var z = (Mathf.Floor(ConVar.Server.worldsize / 146.3f) - 1) - Mathf.Floor((pos.z + (ConVar.Server.worldsize / 2)) / 146.3f);
+            letter = (char)(((int)letter) + x);
+            return $"{letter}{z}";
         }
 
         public BasePlayer findPlayer(string name, BasePlayer player)
@@ -634,7 +682,7 @@ namespace Oxide.Plugins
             {"usageAdd", "/bounty add (target name) (reward amount) \"(reason)\""},
             {"minReward", "The reward has to be at least {0}!" },
             {"notEnough", "You don't have enough {0}!" },
-            {"bountyText", "WANTED! DEAD OR ALIVE!\n {0}\n for {1}\n REWARD: {2}" }
+            {"bountyText", "WANTED! DEAD OR ALIVE!\n {0}\n for {1}\n REWARD: {2}\n last seen in {3}, wearing {4}, {5}" }
         };
         #endregion
     }
