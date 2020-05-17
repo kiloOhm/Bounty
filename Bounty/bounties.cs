@@ -2,7 +2,6 @@
 
 #define DEBUG
 
-using Facepunch;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Configuration;
@@ -11,7 +10,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-using VLB;
 using static Oxide.Plugins.GUICreator;
 
 namespace Oxide.Plugins
@@ -100,19 +98,23 @@ namespace Oxide.Plugins
                 rewardAmount = reward;
                 this.reason = reason;
 
-                ItemDefinition itemDef = ItemManager.FindItemDefinition("note");
-                Item item = ItemManager.Create(itemDef, 1);
-                item.SetFlag(global::Item.Flag.OnFire, true);
-                item.text = text;
-                item.name = "Bounty";
-                placer.GiveItem(item);
-
-                noteUid = item.uid;
+                noteUid = giveNote(placer);
 
                 Instance.bountyData.AddBounty(this);
             }
 
             public Bounty() { }
+
+            public uint giveNote(BasePlayer player)
+            {
+                ItemDefinition itemDef = ItemManager.FindItemDefinition("note");
+                Item item = ItemManager.Create(itemDef, 1);
+                item.SetFlag(global::Item.Flag.OnFire, true);
+                item.text = text;
+                item.name = "Bounty";
+                player.GiveItem(item);
+                return item.uid;
+            }
         }
 
         private class PortableBounty:MonoBehaviour
@@ -176,16 +178,30 @@ namespace Oxide.Plugins
 
             public void tick()
             {
-
+                Instance.sendHunterIndicator(hunter, this);
+                Instance.sendTargetIndicator(target, this);
             }
 
-            public void end()
+            public void end(BasePlayer winner = null)
             {
 #if DEBUG
-                Instance.PrintToChat($"ending hunt {hunterName} -> {bounty.targetName}");
+                Instance.PrintToChat($"ending hunt {hunterName} -> {bounty.targetName}, winner: {winner?.displayName ?? "null"}");
 #endif
-                //announcement
-                //return item
+                if(winner == hunter)
+                {
+                    //msg
+                    //payout
+                }
+                else if(winner == target)
+                {
+                    //msg
+                    //payout/return
+                }
+                else
+                {
+                    //msg
+                }
+
                 huntTimer.Destroy();
                 ticker.Destroy();
                 Instance.huntData.removeHunt(this);
@@ -226,13 +242,13 @@ namespace Oxide.Plugins
             if (player == null) return null;
             if (arg.cmd.FullName == "note.update")
             {
+#if DEBUG
                 player.ChatMessage($"note.update {arg.FullString}");
+#endif
                 Item note = findItemByUID(player.inventory, uint.Parse(arg.Args[0]));
                 if (note == null) return null;
-                player.ChatMessage("note found");
                 Bounty bounty = bountyData.GetBounty(note.uid);
                 if (bounty == null) return null;
-                player.ChatMessage("bounty found");
                 timer.Once(0.2f, () =>
                 {
                     note.text = bounty.text;
@@ -373,7 +389,9 @@ namespace Oxide.Plugins
 
         public void sendBounty(BasePlayer player, Bounty bounty)
         {
-            GuiContainer container = new GuiContainer(this, "bounty");
+#if DEBUG
+            player.ChatMessage($"sendBounty: {bounty.placerName} -> {bounty.targetName}");
+#endif
         }
 
         public void closeBounty(BasePlayer player)
@@ -382,14 +400,18 @@ namespace Oxide.Plugins
 
         }
 
-        public void sendHunterIndicator(BasePlayer player, Bounty bounty)
+        public void sendHunterIndicator(BasePlayer player, Hunt hunt)
         {
-
+#if DEBUG
+            player.ChatMessage($"sendHunterIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
+#endif
         }
 
-        public void sendTargetIndicator(BasePlayer player, Bounty bounty)
+        public void sendTargetIndicator(BasePlayer player, Hunt hunt)
         {
-
+#if DEBUG
+            player.ChatMessage($"sendTargetIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
+#endif
         }
 
         public void closeIndicators(BasePlayer player)
@@ -638,6 +660,12 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Hunt Duration")]
             public int huntDuration;
+
+            [JsonProperty(PropertyName = "Pay out reward to target if hunter dies")]
+            public bool targetPayout;
+
+            [JsonProperty(PropertyName = "Broadcast hunt conclusion in global chat")]
+            public bool broadcastHunt;
         }
 
         private ConfigData getDefaultConfig()
@@ -647,7 +675,9 @@ namespace Oxide.Plugins
                 currency = "scrap",
                 minReward = 100,
                 targetCooldown = 7200,
-                huntDuration = 7200
+                huntDuration = 7200,
+                targetPayout = true,
+                broadcastHunt = true
             };
         }
 
@@ -682,7 +712,8 @@ namespace Oxide.Plugins
             {"usageAdd", "/bounty add (target name) (reward amount) \"(reason)\""},
             {"minReward", "The reward has to be at least {0}!" },
             {"notEnough", "You don't have enough {0}!" },
-            {"bountyText", "WANTED! DEAD OR ALIVE!\n {0}\n for {1}\n REWARD: {2}\n last seen in {3}, wearing {4}, {5}" }
+            {"bountyText", "WANTED! DEAD OR ALIVE!\n{0}\n{1}\nREWARD: {2}\nlast seen in {3}, wearing {4}, {5}" },
+            {"targetDeadBroadcast", "<size=30>{0} claims the {1} bounty on {2}'s head!</size>" }
         };
         #endregion
     }
