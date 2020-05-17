@@ -1,11 +1,15 @@
-﻿#define DEBUG
+﻿// Requires: GUICreator
+
+#define DEBUG
 
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Configuration;
+using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 using static Oxide.Plugins.GUICreator;
 
@@ -30,6 +34,9 @@ namespace Oxide.Plugins
         #endregion
 
         #region references
+        [PluginReference]
+        private Plugin Grid;
+
         private GUICreator guiCreator;
         #endregion
 
@@ -97,7 +104,7 @@ namespace Oxide.Plugins
                 ItemDefinition itemDef = ItemManager.FindItemDefinition("note");
                 Item item = ItemManager.Create(itemDef, 1);
                 item.SetFlag(global::Item.Flag.OnFire, true);
-                item.text = this.text;
+                item.text = $"{this.text}\n{Instance.lastSeen(target)}";
                 item.name = "Bounty";
                 placer.GiveItem(item);
 
@@ -281,20 +288,27 @@ namespace Oxide.Plugins
 
         private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
         {
-            if (oldItem.info.shortname == "note" && oldItem.HasFlag(global::Item.Flag.OnFire))
+            if (player == null) return;
+            if(oldItem != null)
             {
-                Bounty bounty = bountyData.GetBounty(oldItem.uid);
-                if(bounty != null)
+                if (oldItem?.info?.shortname == "note" && oldItem.HasFlag(global::Item.Flag.OnFire))
                 {
-                    closeBounty(player);
+                    Bounty bounty = bountyData.GetBounty(oldItem.uid);
+                    if (bounty != null)
+                    {
+                        closeBounty(player);
+                    }
                 }
             }
-            if (newItem.info.shortname == "note" && newItem.HasFlag(global::Item.Flag.OnFire))
+            if(newItem != null)
             {
-                Bounty bounty = bountyData.GetBounty(oldItem.uid);
-                if (bounty != null)
+                if (newItem?.info?.shortname == "note" && newItem.HasFlag(global::Item.Flag.OnFire))
                 {
-                    sendBounty(player, bounty);
+                    Bounty bounty = bountyData.GetBounty(newItem.uid);
+                    if (bounty != null)
+                    {
+                        sendBounty(player, bounty);
+                    }
                 }
             }
         }
@@ -354,7 +368,7 @@ namespace Oxide.Plugins
 
         public void sendBounty(BasePlayer player, Bounty bounty)
         {
-
+            GuiContainer container = new GuiContainer(this, "bounty");
         }
 
         public void closeBounty(BasePlayer player)
@@ -381,6 +395,28 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
+
+        public string lastSeen(BasePlayer player)
+        {
+            StringBuilder sb = new StringBuilder("last seen "); 
+            string grid = getGrid(player.transform.position);
+            if (!string.IsNullOrEmpty(grid)) sb.Append($"in {grid} ");
+            sb.Append("wearing: ");
+            int i = 1;
+            foreach(Item item in player.inventory.containerWear.itemList)
+            {
+                sb.Append($"{item.info.displayName.english}");
+                if (i != player.inventory.containerWear.itemList.Count) sb.Append(", ");
+                i++;
+            }
+            return sb.ToString();
+        }
+
+        public string getGrid(Vector3 position)
+        {
+            if (Grid == null) return null;
+            return (string)Grid.Call("getGrid", position);
+        }
 
         public BasePlayer findPlayer(string name, BasePlayer player)
         {
