@@ -115,6 +115,9 @@ namespace Oxide.Plugins
                 player.GiveItem(item);
                 return item.uid;
             }
+
+            public Hunt startHunt(BasePlayer hunter) => new Hunt(this, hunter);
+
         }
 
         private class PortableBounty:MonoBehaviour
@@ -299,6 +302,20 @@ namespace Oxide.Plugins
         ItemContainer.CanAcceptResult? CanAcceptItem(ItemContainer container, Item item, int targetPos)
         {
             //display tooltip "put the bounty into your hotbar and select it to start hunting"
+            return null;
+        }
+
+        object CanMoveItem(Item item, PlayerInventory playerLoot, uint targetContainer, int targetSlot, int amount)
+        {
+            if (item == null) return null;
+            if (item.info.shortname != "note") return null;
+            if (!item.HasFlag(global::Item.Flag.OnFire)) return null;
+            Bounty bounty = bountyData.GetBounty(item.uid);
+            if (bounty == null) return null;
+
+            item.text = bounty.text;
+            item.MarkDirty();
+
             return null;
         }
 
