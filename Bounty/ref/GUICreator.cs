@@ -85,7 +85,7 @@ namespace Oxide.Plugins
 
         #region classes
 
-        public class Rectangle:CuiRectTransformComponent
+        public class Rectangle : CuiRectTransformComponent
         {
             public double anchorMinX;
             public double anchorMinY;
@@ -121,7 +121,7 @@ namespace Oxide.Plugins
                 anchorMinY = newY / resY;
                 anchorMaxX = (X + W) / resX;
                 anchorMaxY = (newY + H) / resY;
-                
+
                 AnchorMin = $"{anchorMinX} {anchorMinY}";
                 AnchorMax = $"{anchorMaxX} {anchorMaxY}";
             }
@@ -166,7 +166,7 @@ namespace Oxide.Plugins
             }
         }
 
-        public class GuiText:CuiTextComponent
+        public class GuiText : CuiTextComponent
         {
             public GuiText()
             {
@@ -249,7 +249,7 @@ namespace Oxide.Plugins
 
             private void purgeDuplicates(string name)
             {
-                foreach(CuiElement element in this)
+                foreach (CuiElement element in this)
                 {
                     if (element.Name == name)
                     {
@@ -384,7 +384,7 @@ namespace Oxide.Plugins
                 if (string.IsNullOrEmpty(name)) name = "text";
                 else name = PluginInstance.encodeName(this, name);
                 purgeDuplicates(name);
-                
+
                 text.FadeIn = FadeIn;
 
                 this.Add(new CuiElement
@@ -452,7 +452,7 @@ namespace Oxide.Plugins
                     FadeOut = FadeOut
                 });
 
-                if(text != null) this.addText(PluginInstance.decodeName(this, name) + "_txt", new CuiRectTransformComponent(), text, FadeIn, FadeOut, PluginInstance.decodeName(this, name));
+                if (text != null) this.addText(PluginInstance.decodeName(this, name) + "_txt", new CuiRectTransformComponent(), text, FadeIn, FadeOut, PluginInstance.decodeName(this, name));
 
                 if (CursorEnabled)
                 {
@@ -564,7 +564,7 @@ namespace Oxide.Plugins
             public void destroyGui(Plugin plugin, GuiContainer container, string name = null)
             {
                 if (container == null) return;
-                if(name == null)
+                if (name == null)
                 {
                     List<GuiContainer> garbage = new List<GuiContainer>();
                     destroyGuiContainer(plugin, container, garbage);
@@ -603,7 +603,7 @@ namespace Oxide.Plugins
                     {
                         destroyGuiElement(plugin, container, element.Name, eGarbage);
                     }
-                    foreach(CuiElement element in eGarbage)
+                    foreach (CuiElement element in eGarbage)
                     {
                         container.Remove(element);
                     }
@@ -639,7 +639,7 @@ namespace Oxide.Plugins
                 CuiHelper.DestroyUi(player, target.Name);
                 garbage.Add(target);
 
-                
+
             }
 
             public void destroyAllGui(Plugin plugin)
@@ -739,7 +739,7 @@ namespace Oxide.Plugins
         private string decodeName(GuiContainer container, string name)
         {
             if (GuiContainer.layers.Contains(name)) return name;
-            return name.Substring(container.name.Length+1);
+            return name.Substring(container.name.Length + 1);
         }
 
         public string getItemIcon(string shortname)
@@ -774,15 +774,15 @@ namespace Oxide.Plugins
             if (arg.Args != null) player = BasePlayer.FindByID(ulong.Parse(arg.Args[0]));
             if (player == null) return;
             GuiTracker tracker = GuiTracker.getGuiTracker(player);
-            if(tracker.activeGuiContainers.Count == 0)
+            if (tracker.activeGuiContainers.Count == 0)
             {
                 SendReply(arg, "you don't have any active guiContainers!");
                 return;
             }
-            foreach(GuiContainer container in tracker.activeGuiContainers)
+            foreach (GuiContainer container in tracker.activeGuiContainers)
             {
                 SendReply(arg, $"Plugin: {container.plugin.Name}, Container: {container.name}, Parent: {container.parent}:");
-                foreach(CuiElement element in container)
+                foreach (CuiElement element in container)
                 {
                     SendReply(arg, $"- Element: {element.Name}, Parent: {element.Parent}");
                 }
@@ -792,7 +792,7 @@ namespace Oxide.Plugins
         private void OnGuiInput(ConsoleSystem.Arg arg)
         {
             //gui.input pluginName containerName inputName --close elementNames... --input text...
-            if(arg.Args.Length < 3)
+            if (arg.Args.Length < 3)
             {
                 SendReply(arg, "OnGuiInput: not enough arguments given!");
                 return;
@@ -811,14 +811,14 @@ namespace Oxide.Plugins
             Stack<string> args = new Stack<string>(arg.Args.Reverse<string>());
 
             Plugin plugin = Manager.GetPlugin(args.Pop());
-            if(plugin == null)
+            if (plugin == null)
             {
                 SendReply(arg, "OnGuiInput: Plugin not found!");
                 return;
             }
 
             GuiContainer container = tracker.getContainer(plugin, args.Pop());
-            if( container == null)
+            if (container == null)
             {
                 SendReply(arg, "OnGuiInput: Container not found!");
                 return;
@@ -834,9 +834,9 @@ namespace Oxide.Plugins
             List<string> select = null;
             string next;
 
-            while(args.TryPop(out next))
+            while (args.TryPop(out next))
             {
-                if (next == "--close")select = close;
+                if (next == "--close") select = close;
                 else if (next == "--input") select = input;
                 else
                 {
@@ -852,16 +852,16 @@ namespace Oxide.Plugins
 
             #region execution
 
-            if(!container.runCallback(inputName, player, input.ToArray())) 
+            if (!container.runCallback(inputName, player, input.ToArray()))
             {
 #if DEBUG
                 SendReply(arg, $"OnGuiInput: Callback for {plugin.Name} {container.name} {inputName} wasn't found");
 #endif
             }
 
-            if(close.Count != 0)
+            if (close.Count != 0)
             {
-                foreach( string name in close)
+                foreach (string name in close)
                 {
                     tracker.destroyGui(plugin, container, name);
                 }
