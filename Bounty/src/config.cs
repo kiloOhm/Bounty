@@ -8,6 +8,9 @@
 
         private class ConfigData
         {
+            [JsonProperty(PropertyName = "Steam API key")]
+            public string steamAPIKey;
+
             [JsonProperty(PropertyName = "Currency Item shortname")]
             public string currency;
 
@@ -31,6 +34,7 @@
         {
             return new ConfigData
             {
+                steamAPIKey = "",
                 currency = "scrap",
                 minReward = 100,
                 targetCooldown = 7200,

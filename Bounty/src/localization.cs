@@ -18,7 +18,8 @@
             {"minReward", "The reward has to be at least {0}!" },
             {"notEnough", "You don't have enough {0}!" },
             {"bountyText", "WANTED! DEAD OR ALIVE!\n{0}\n{1}\nREWARD: {2}\nlast seen in {3}, wearing {4}, {5}" },
-            {"targetDeadBroadcast", "<size=30>{0} claims the {1} bounty on {2}'s head!</size>" }
+            {"targetDeadBroadcast", "<size=30>{0} claims the {1} bounty on {2}'s head!</size>" },
+            {"apiKey", "Please enter your steam API key in the config file. Get yours at https://steamcommunity.com/dev/apikey" }
         };
     }
 }

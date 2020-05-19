@@ -11,8 +11,8 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("bounties", "OHM", "0.1.0")]
-    [Description("")]
+    [Info("bounties", "OHM & Bunsen", "2.0.0")]
+    [Description("RP Bounty Hunting")]
     partial class bounties : RustPlugin
     {
         private static Plugins.bounties PluginInstance;
@@ -234,6 +234,7 @@ namespace Oxide.Plugins
         {
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
             cmd.AddChatCommand("test", this, nameof(testCommand));
+            cmd.AddConsoleCommand("bounties.test", this, nameof(consoleTestCommand));
         }
 
         private void bountyCommand(BasePlayer player, string command, string[] args)
@@ -276,7 +277,20 @@ namespace Oxide.Plugins
 
         private void testCommand(BasePlayer player, string command, string[] args)
         {
-            player.ChatMessage(armedWith(player));
+            GetPlayerSummary(ulong.Parse(args[0]), (ps) => 
+            {
+                if (ps == null) return;
+                player.ChatMessage(ps.personaname);
+            });
+        }
+
+        private void consoleTestCommand(ConsoleSystem.Arg arg)
+        {
+            GetPlayerSummary(ulong.Parse(arg.Args[0]), (ps) =>
+            {
+                if (ps == null) return;
+                SendReply(arg, ps.personaname);
+            });
         }
     }
 }﻿namespace Oxide.Plugins
@@ -289,6 +303,9 @@ namespace Oxide.Plugins
 
         private class ConfigData
         {
+            [JsonProperty(PropertyName = "Steam API key")]
+            public string steamAPIKey;
+
             [JsonProperty(PropertyName = "Currency Item shortname")]
             public string currency;
 
@@ -312,6 +329,7 @@ namespace Oxide.Plugins
         {
             return new ConfigData
             {
+                steamAPIKey = "",
                 currency = "scrap",
                 minReward = 100,
                 targetCooldown = 7200,
@@ -685,7 +703,8 @@ namespace Oxide.Plugins
             {"minReward", "The reward has to be at least {0}!" },
             {"notEnough", "You don't have enough {0}!" },
             {"bountyText", "WANTED! DEAD OR ALIVE!\n{0}\n{1}\nREWARD: {2}\nlast seen in {3}, wearing {4}, {5}" },
-            {"targetDeadBroadcast", "<size=30>{0} claims the {1} bounty on {2}'s head!</size>" }
+            {"targetDeadBroadcast", "<size=30>{0} claims the {1} bounty on {2}'s head!</size>" },
+            {"apiKey", "Please enter your steam API key in the config file. Get yours at https://steamcommunity.com/dev/apikey" }
         };
     }
 }﻿namespace Oxide.Plugins
@@ -855,6 +874,67 @@ namespace Oxide.Plugins
         private void revokePermission(BasePlayer player, permissions perm)
         {
             player.IPlayer.RevokePermission($"{PluginInstance.Name}.{Enum.GetName(typeof(permissions), perm)}");
+        }
+    }
+}﻿namespace Oxide.Plugins
+{
+    using Newtonsoft.Json;
+    using Oxide.Core.Libraries;
+    using System;
+
+    partial class bounties : RustPlugin
+    {
+        public class WebResponse
+        {
+            public SteamUser response;
+        }
+        
+        public class SteamUser
+        {
+            public PlayerSummary[] players;
+        }
+
+        public class PlayerSummary
+        {
+            public string steamid;
+            public string personaname;
+            public string profileurl;
+            public string avatarfull;
+        }
+
+        public void GetPlayerSummary(ulong steamID, Action<PlayerSummary> callback)
+        {
+            if(string.IsNullOrEmpty(config.steamAPIKey))
+            {
+                Puts(lang.GetMessage("apiKey", this));
+                return;
+            }
+            string url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=" + config.steamAPIKey.ToString() + "&steamids=" + steamID;
+            webrequest.Enqueue(url, null, (code, response) =>
+            {
+                if (code != 200 || response == null)
+                {
+                    Puts($"Couldn't get an answer from Steam!");
+                    return;
+                }
+                WebResponse webResponse = JsonConvert.DeserializeObject<WebResponse>(response);
+                if (webResponse?.response?.players == null)
+                {
+                    Puts("response is null");
+                    callback(null);
+                    return;
+                }
+                if(webResponse.response.players.Length == 0)
+                {
+                    Puts("response has no playerSummaries");
+                    callback(null);
+                    return;
+                }
+#if DEBUG
+                Puts($"Got PlayerSummary: {webResponse?.response?.players[0]?.personaname ?? "null"} for steamID [{steamID}]");
+#endif
+                callback(webResponse.response.players[0]);
+            }, this, RequestMethod.GET);
         }
     }
 }
