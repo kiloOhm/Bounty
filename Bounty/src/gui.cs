@@ -31,7 +31,9 @@
         public void closeBounty(BasePlayer player)
         {
             //for bounty and creator
-
+#if DEBUG
+            player.ChatMessage($"closeBounty");
+#endif
         }
 
         public void sendHunterIndicator(BasePlayer player, Hunt hunt)
