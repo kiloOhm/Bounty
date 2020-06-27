@@ -115,10 +115,16 @@
             {
             }
 
-            public static Hunt getHunt(Bounty bounty)
+            public static Hunt getHuntByHunter(BasePlayer player)
             {
                 if (!initialized) init();
-                return instance.hunts.Where((h) => h.bounty == bounty).First();
+                return instance.hunts.Where((h) => h.hunterID == player.userID).First();
+            }
+
+            public static Hunt getHuntByTarget(BasePlayer player)
+            {
+                if (!initialized) init();
+                return instance.hunts.Where((h) => h.bounty.targetID == player.userID).First();
             }
 
             public static void addHunt(Hunt hunt)

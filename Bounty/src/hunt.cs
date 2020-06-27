@@ -51,6 +51,7 @@
 
             public Hunt(Bounty bounty, BasePlayer hunter)
             {
+                if (bounty.hunt != null) PluginInstance.Puts($"Hunt Constructor: Bounty {bounty.placerName} -> {bounty.targetName} already has an ongoing hunt!");
                 timestamp = DateTime.Now;
                 this.bounty = bounty;
                 hunterID = hunter.userID;

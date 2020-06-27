@@ -34,6 +34,8 @@
             [JsonProperty(PropertyName = "Reward amount")]
             public int rewardAmount;
 
+            public Hunt hunt;
+
             public Item reward
             {
                 get
@@ -44,6 +46,7 @@
                 }
             }
 
+            [JsonProperty(PropertyName = "Reason")]
             public string reason;
 
             public string text
@@ -83,7 +86,7 @@
                 return item.uid;
             }
 
-            public Hunt startHunt(BasePlayer hunter) => new Hunt(this, hunter);
+            public Hunt startHunt(BasePlayer hunter) => hunt = new Hunt(this, hunter);
 
         }
 

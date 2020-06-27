@@ -7,7 +7,7 @@
         partial void initCommands()
         {
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
-            cmd.AddChatCommand("test", this, nameof(testCommand));
+            cmd.AddChatCommand("test2", this, nameof(testCommand));
             cmd.AddConsoleCommand("bounties.test", this, nameof(consoleTestCommand));
         }
 
