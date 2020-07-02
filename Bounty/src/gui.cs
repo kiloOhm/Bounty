@@ -1,5 +1,6 @@
 ﻿namespace Oxide.Plugins
 {
+    using ConVar;
     using Facepunch.Extend;
     using Rust.Workshop.Editor;
     using Steamworks.Data;
@@ -50,7 +51,8 @@
 
             public void init(BasePlayer placer)
             {
-                new Bounty(placer, target, reward, reason);
+                Bounty b = new Bounty(placer, target, reward, reason);
+                placer.inventory.Take(null, b.reward.info.itemid, reward);
             }
         }
 
@@ -315,6 +317,8 @@
                 {
                     Effect.server.Run(successSound, player.transform.position);
                     bounty.startHunt(p);
+                    player.GetActiveItem()?.Remove();
+                    BountyData.removeBounty(bounty.noteUid);
                     closeBounty(player);
                 }
             };
@@ -385,11 +389,12 @@
             Rectangle bgPos = new Rectangle(50, 250, 350, 100, resX, resY, true);
             float distance = Vector3.Distance(hunt.hunter.transform.position, hunt.target.transform.position);
             GuiColor bgColor = gradientRedYellowGreen(Mathf.Clamp((distance / config.gradientBase), 0, 1));
+            bgColor.setAlpha(0.5f);
             c.addPlainPanel("Background", bgPos, GuiContainer.Layer.hud, bgColor, 0, 0, GuiContainer.Blur.medium);
 
             //TopLine
             Rectangle topLinePos = new Rectangle(50, 250, 350, 50, resX, resY, true);
-            string TopLineString = "You are being hunted!";
+            string TopLineString = $"You are being hunted{(config.showHunter?$" by {hunt.hunter.displayName}":"")}!";
             int topLineFontsize = guiCreator.getFontsizeByFramesize(TopLineString.Length, topLinePos);
             GuiText topLineText = new GuiText(TopLineString, topLineFontsize, opaqueWhite);
             c.addText("topline", topLinePos, GuiContainer.Layer.hud, topLineText);
@@ -418,6 +423,24 @@
 #endif
             GuiTracker.getGuiTracker(player).destroyGui(this, "hunterIndicator");
             GuiTracker.getGuiTracker(player).destroyGui(this, "targetIndicator");
+        }
+
+        public void huntExpiredMsg(Hunt hunt)
+        {
+            guiCreator.customGameTip(hunt.hunter, "The hunt is over. Better luck next time!", 5);
+            guiCreator.customGameTip(hunt.target, "The hunt is over. You're safe... for now...", 5);
+        }
+
+        public void huntSuccessfullMsg(Hunt hunt)
+        {
+            guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.target}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
+            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunter.displayName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.target.displayName}'s head!</color>\nRIP {hunt.target.displayName}!");
+        }
+
+        public void huntFailedMsg(Hunt hunt)
+        {
+            guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunter}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
+            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.target.displayName} fends off his hunter {hunt.hunter.displayName} and claims {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english}</color>\nBetter luck next time {hunt.hunter.displayName}!");
         }
 
         public GuiColor gradientRedYellowGreen(float level)

@@ -77,16 +77,25 @@
                 if (winner == hunter)
                 {
                     //msg
+                    PluginInstance.huntSuccessfullMsg(this);
+
                     //payout
+                    hunter.GiveItem(bounty.reward);
                 }
                 else if (winner == target)
                 {
                     //msg
-                    //payout/return
+                    PluginInstance.huntFailedMsg(this);
+
+                    //payout
+                    target.GiveItem(bounty.reward);
                 }
                 else
                 {
                     //msg
+                    PluginInstance.huntExpiredMsg(this);
+                    bounty.noteUid = bounty.giveNote(hunter);
+                    BountyData.AddBounty(bounty);
                 }
 
                 huntTimer.Destroy();

@@ -32,8 +32,8 @@
             [JsonProperty(PropertyName = "Base safe distance for target indicator background color gradient calculation")]
             public int gradientBase;
 
-            [JsonProperty(PropertyName = "Pay out reward to target if hunter dies")]
-            public bool targetPayout;
+            [JsonProperty(PropertyName = "Show hunter name to target")]
+            public bool showHunter;
 
             [JsonProperty(PropertyName = "Broadcast hunt conclusion in global chat")]
             public bool broadcastHunt;
@@ -43,6 +43,9 @@
 
             [JsonProperty(PropertyName = "Require reason for bounties")]
             public bool requireReason;
+
+            [JsonProperty(PropertyName = "Allow skull crushing as confirmation")]
+            public bool skullCrushing;
         }
 
         private ConfigData getDefaultConfig()
@@ -57,10 +60,11 @@
                 huntDuration = 7200,
                 indicatorRefresh = 5,
                 gradientBase = 300,
-                targetPayout = true,
+                showHunter = true,
                 broadcastHunt = true,
                 showSteamImage = true,
-                requireReason = true
+                requireReason = true,
+                skullCrushing = true
             };
         }
 

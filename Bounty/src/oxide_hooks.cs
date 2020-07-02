@@ -21,6 +21,8 @@
             initLang();
             initPermissions();
             initGUI();
+
+            if (!config.skullCrushing) Unsubscribe("OnItemAction");
         }
 
         object OnServerCommand(ConsoleSystem.Arg arg)
@@ -36,7 +38,7 @@
 #endif
                 Item note = findItemByUID(player.inventory, uint.Parse(arg.Args[0]));
                 if (note == null) return null;
-                Bounty bounty = BountyData.GetBounty(note.uid);
+                Bounty bounty = BountyData.GetBounty(note);
                 if (bounty == null) return null;
                 timer.Once(0.2f, () =>
                 {
@@ -73,7 +75,7 @@
         {
             if (item.info.shortname != "note") return;
             if (!item.HasFlag(global::Item.Flag.OnFire)) return;
-            Bounty bounty = BountyData.GetBounty(item.uid);
+            Bounty bounty = BountyData.GetBounty(item);
             if (bounty == null) return;
 
             //attach portableBounty
@@ -96,7 +98,7 @@
             if (item == null) return null;
             if (item.info.shortname != "note") return null;
             if (!item.HasFlag(global::Item.Flag.OnFire)) return null;
-            Bounty bounty = BountyData.GetBounty(item.uid);
+            Bounty bounty = BountyData.GetBounty(item);
             if (bounty == null) return null;
 
             item.text = bounty.text;
@@ -112,7 +114,7 @@
             {
                 if (newItem?.info?.shortname == "note" && newItem.HasFlag(global::Item.Flag.OnFire))
                 {
-                    Bounty bounty = BountyData.GetBounty(newItem.uid);
+                    Bounty bounty = BountyData.GetBounty(newItem);
                     if (bounty != null)
                     {
                         sendBounty(player, bounty);
@@ -121,6 +123,63 @@
                 }
             }
             closeBounty(player);
+        }
+
+        object OnPlayerDeath(BasePlayer victim, HitInfo info)
+        {
+            BasePlayer killer = null;
+            if (victim?.lastAttacker == null) return null;
+            if (victim?.lastAttacker is BasePlayer) killer = victim.lastAttacker as BasePlayer;
+            if (killer = null) return null;
+
+#if DEBUG
+            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
+#endif
+
+            Hunt hunt = null;   
+            hunt = HuntData.getHuntByTarget(victim);
+            if (hunt == null) hunt = HuntData.getHuntByHunter(victim);
+            if (hunt == null) return null;
+            if (hunt.hunter == killer || hunt.target == killer)
+            {
+                hunt.end(killer);
+                return null;
+            }   
+
+            return null;
+        }
+
+        private object OnItemAction(Item item, string action)
+        {
+            if (action != "crush")
+                return null;
+            if (item.info.shortname != "skull.human")
+                return null;
+            string skullName = null;
+            if (item.name != null)
+                skullName = item.name.Substring(10, item.name.Length - 11);
+            if (string.IsNullOrEmpty(skullName)) return null;
+
+            BasePlayer killer = item.GetOwnerPlayer();
+            BasePlayer victim = BasePlayer.Find(skullName);
+
+            if (victim == null) return null;
+
+#if DEBUG
+            PrintToChat($"{killer} crushed {victim}'s skull!");
+#endif
+
+            Hunt hunt = null;
+            hunt = HuntData.getHuntByTarget(victim);
+            if (hunt == null) hunt = HuntData.getHuntByHunter(victim);
+            if (hunt == null) return null;
+            if (hunt.hunter == killer || hunt.target == killer)
+            {
+                hunt.end(killer);
+                return null;
+            }
+
+            return null;
         }
     }
 }

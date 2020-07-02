@@ -32,11 +32,12 @@
             {
             }
 
-            public static Bounty GetBounty(uint itemID)
+            public static Bounty GetBounty(Item item)
             {
                 if (!initialized) init();
-                if (!instance.bounties.ContainsKey(itemID)) return null;
-                return instance.bounties[itemID];
+                if (!instance.bounties.ContainsKey(item.uid)) return null;
+                Bounty bounty = instance.bounties[item.uid];
+                return bounty;
             }
 
             public static void AddBounty(Bounty bounty)
