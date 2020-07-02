@@ -177,7 +177,7 @@
             creatorButton(player, bp: bp);
         }
 
-        public enum createErrorType { none, missingTarget, badReward, cantAfford, missingReason };
+        public enum createErrorType { none, missingTarget, badReward, cantAfford, missingReason};
         public void creatorButton(BasePlayer player, createErrorType error = createErrorType.none, BountyBP bp = null)
         {
             GuiContainer c = new GuiContainer(this, "createButton", "bountyCreator");
@@ -280,7 +280,7 @@
             c.display(player);
         }
 
-        public enum huntErrorType {none ,hunterAlreadyHunting, targetAlreadyHunted, targetCooldown, huntActive};
+        public enum huntErrorType {none ,hunterAlreadyHunting, targetAlreadyHunted, targetCooldown, huntActive, selfHunt};
         public void huntButton(BasePlayer player, Bounty bounty, huntErrorType error = huntErrorType.none)
         {
             GuiContainer c = new GuiContainer(this, "huntButton", "bountyPreview");
@@ -293,10 +293,13 @@
                 new GuiText("Target is already being hunted", guiCreator.getFontsizeByFramesize(30, ButtonPos), lightRed),
                 new GuiText("Target can't be hunted yet", guiCreator.getFontsizeByFramesize(26, ButtonPos), lightRed),
                 new GuiText("Hunt Active", guiCreator.getFontsizeByFramesize(11, ButtonPos), lightRed),
+                new GuiText("You can't hunt yourself!",guiCreator.getFontsizeByFramesize(24, ButtonPos), lightRed)
             };
 
             Action<BasePlayer, string[]> cb = (p, a) =>
             {
+                TimeSpan targetCooldown = TimeSpan.Zero;
+                TimeSpan creationCooldown = new TimeSpan(0, 0, config.creationCooldown - (int)bounty.timeSinceCreation.TotalSeconds);
                 if (error == huntErrorType.huntActive) return;
                 else if (bounty.hunt != null || HuntData.getHuntByHunter(p) != null)
                 {
@@ -308,17 +311,25 @@
                     Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetAlreadyHunted);
                 }
-                else if(bounty.timeSinceCreation.TotalSeconds < config.creationCooldown || CooldownData.isOnCooldown(bounty.target))
+                else if(bounty.timeSinceCreation.TotalSeconds < config.creationCooldown || CooldownData.isOnCooldown(bounty.target, out targetCooldown))
                 {
                     Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetCooldown);
+                    TimeSpan select = creationCooldown;
+                    if (targetCooldown > creationCooldown) select = targetCooldown;
+                    player.ChatMessage($"Cooldown: {select.ToString(@"hh\:mm\:ss")}");
+                }
+                else if(bounty.target == player)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    huntButton(player, bounty, huntErrorType.selfHunt);
                 }
                 else
                 {
                     Effect.server.Run(successSound, player.transform.position);
                     bounty.startHunt(p);
                     BountyData.removeBounty(bounty.noteUid);
-                    player.GetActiveItem()?.Remove();
+                    player.GetActiveItem()?.Remove();       
                     closeBounty(player);
                 }
             };
@@ -435,7 +446,7 @@
 
         public void huntSuccessfullMsg(Hunt hunt)
         {
-            guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.target}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
+            guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.target.displayName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
             if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunter.displayName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.target.displayName}'s head!</color>\nRIP {hunt.target.displayName}!");
 
             LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt successful: {hunt.hunter.displayName} -> {hunt.target.displayName} ", this);
@@ -443,7 +454,7 @@
 
         public void huntFailedMsg(Hunt hunt)
         {
-            guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunter}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
+            guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunter.displayName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
             if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.target.displayName} fends off his hunter {hunt.hunter.displayName} and claims {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english}</color>\nBetter luck next time {hunt.hunter.displayName}!");
 
             LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")}Hunt failed: {hunt.hunter.displayName} -> {hunt.target.displayName}", this);

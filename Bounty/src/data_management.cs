@@ -199,9 +199,11 @@
                 save();
             }
 
-            public static bool isOnCooldown(BasePlayer player)
+            public static bool isOnCooldown(BasePlayer player, out TimeSpan remaining)
             {
+                remaining = TimeSpan.Zero;
                 if (!instance.cooldowns.ContainsKey(player.userID)) return false;
+                remaining = new TimeSpan(0,0,config.targetCooldown - (int)(DateTime.Now - instance.cooldowns[player.userID]).TotalSeconds);
                 if ((DateTime.Now - instance.cooldowns[player.userID]).TotalSeconds < config.targetCooldown) return true;
                 else
                 {

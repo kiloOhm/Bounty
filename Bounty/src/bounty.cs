@@ -53,8 +53,9 @@
             {
                 get
                 {
-                    ItemDefinition itemDef = ItemManager.FindItemDefinition(config.currency);
-                    return string.Format(PluginInstance.lang.GetMessage("bountyText", PluginInstance), targetName, reason ?? $"disrespecting {placerName}", $"{rewardAmount} {itemDef?.displayName?.english ?? "$"}", PluginInstance.getGrid(target.transform.position), PluginInstance.wearing(target), PluginInstance.armedWith(target));
+                    //ItemDefinition itemDef = ItemManager.FindItemDefinition(config.currency);
+                    //return string.Format(PluginInstance.lang.GetMessage("bountyText", PluginInstance), targetName, reason ?? $"disrespecting {placerName}", $"{rewardAmount} {itemDef?.displayName?.english ?? "$"}", PluginInstance.getGrid(target.transform.position), PluginInstance.wearing(target), PluginInstance.armedWith(target));
+                    return "To start hunting, put this note in your hotbar and select it!";
                 }
             }
 

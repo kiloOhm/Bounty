@@ -1,6 +1,6 @@
 ﻿// Requires: GUICreator
 
-#define DEBUG
+//#define DEBUG
 
 using Oxide.Core;
 using System;
