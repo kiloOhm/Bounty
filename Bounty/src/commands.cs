@@ -1,5 +1,6 @@
 ﻿namespace Oxide.Plugins
 {
+    using System;
     using UnityEngine;
 
     partial class bounties : RustPlugin
@@ -55,11 +56,7 @@
 
         private void testCommand(BasePlayer player, string command, string[] args)
         {
-            GetSteamUserData(ulong.Parse(args[0]), (ps) => 
-            {
-                if (ps == null) return;
-                player.ChatMessage(ps.personaname);
-            });
+
         }
 
         private void consoleTestCommand(ConsoleSystem.Arg arg)

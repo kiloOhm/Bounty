@@ -29,7 +29,7 @@ namespace Oxide.Plugins
             StringBuilder sb = new StringBuilder("last seen ");
             string grid = getGrid(player.transform.position);
             if (!string.IsNullOrEmpty(grid)) sb.Append($"in {grid} ");
-            sb.Append("wearing: ");
+            sb.Append(", wearing: ");
             if (player.inventory.containerWear.itemList.Count == 0) sb.Append("nothing");
             else
             {
@@ -41,6 +41,7 @@ namespace Oxide.Plugins
                     i++;
                 }
             }
+            sb.Append($", {armedWith(player)}");
             return sb.ToString();
         }
 

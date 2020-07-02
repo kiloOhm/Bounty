@@ -29,7 +29,7 @@ namespace Oxide.Plugins
             StringBuilder sb = new StringBuilder("last seen ");
             string grid = getGrid(player.transform.position);
             if (!string.IsNullOrEmpty(grid)) sb.Append($"in {grid} ");
-            sb.Append("wearing: ");
+            sb.Append(", wearing: ");
             if (player.inventory.containerWear.itemList.Count == 0) sb.Append("nothing");
             else
             {
@@ -41,6 +41,7 @@ namespace Oxide.Plugins
                     i++;
                 }
             }
+            sb.Append($", {armedWith(player)}");
             return sb.ToString();
         }
 
@@ -238,6 +239,7 @@ namespace Oxide.Plugins
     }
 }﻿namespace Oxide.Plugins
 {
+    using System;
     using UnityEngine;
 
     partial class bounties : RustPlugin
@@ -293,11 +295,7 @@ namespace Oxide.Plugins
 
         private void testCommand(BasePlayer player, string command, string[] args)
         {
-            GetSteamUserData(ulong.Parse(args[0]), (ps) => 
-            {
-                if (ps == null) return;
-                player.ChatMessage(ps.personaname);
-            });
+
         }
 
         private void consoleTestCommand(ConsoleSystem.Arg arg)
@@ -340,6 +338,9 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Hunt indicator refresh interval")]
             public int indicatorRefresh;
 
+            [JsonProperty(PropertyName = "Base safe distance for target indicator background color gradient calculation")]
+            public int gradientBase;
+
             [JsonProperty(PropertyName = "Pay out reward to target if hunter dies")]
             public bool targetPayout;
 
@@ -364,6 +365,7 @@ namespace Oxide.Plugins
                 targetCooldown = 7200,
                 huntDuration = 7200,
                 indicatorRefresh = 5,
+                gradientBase = 300,
                 targetPayout = true,
                 broadcastHunt = true,
                 showSteamImage = true,
@@ -645,6 +647,7 @@ namespace Oxide.Plugins
 }﻿namespace Oxide.Plugins
 {
     using Facepunch.Extend;
+    using Rust.Workshop.Editor;
     using Steamworks.Data;
     using System;
     using System.Collections.Generic;
@@ -667,6 +670,10 @@ namespace Oxide.Plugins
         float FadeOut = 0.1f;
         int resX = 1920;
         int resY = 1080;
+
+        GuiColor opaqueWhite = new GuiColor(1, 1, 1, 1);
+
+        GuiColor lightGrey = new GuiColor(0, 0, 0, 0.5f);
 
         GuiColor darkGreen = new GuiColor(67, 84, 37, 0.8f);
         GuiColor lightGreen = new GuiColor(134, 190, 41, 0.8f);
@@ -826,7 +833,7 @@ namespace Oxide.Plugins
                 new GuiText("Target not found!", guiCreator.getFontsizeByFramesize(17, ButtonPos), lightRed),
                 new GuiText("Invalid reward!", guiCreator.getFontsizeByFramesize(15, ButtonPos), lightRed),
                 new GuiText("Can't afford reward!", guiCreator.getFontsizeByFramesize(20, ButtonPos), lightRed),
-                new GuiText("Reason can't be empty!", guiCreator.getFontsizeByFramesize(22, ButtonPos), lightRed)
+                new GuiText("Reason missing!", guiCreator.getFontsizeByFramesize(15, ButtonPos), lightRed)
             };
 
             Action<BasePlayer, string[]> cb = (p, a) =>
@@ -861,7 +868,7 @@ namespace Oxide.Plugins
             {
                 PluginInstance.timer.Once(2f, () =>
                 {
-                    creatorButton(player, bp: bp);
+                    if (GuiTracker.getGuiTracker(player).getContainer(this, "bountyCreator") != null) creatorButton(player, bp: bp);
                 });
             }
         }
@@ -875,7 +882,7 @@ namespace Oxide.Plugins
             player.ChatMessage($"sendBounty: {bounty.placerName} -> {bounty.targetName}");
 #endif
             closeBounty(player);
-            GuiContainer c = new GuiContainer(this, "bounty");
+            GuiContainer c = new GuiContainer(this, "bountyPreview");
 
             //template
             Rectangle templatePos = new Rectangle(623, 26, 673, 854, resX, resY, true);
@@ -920,7 +927,7 @@ namespace Oxide.Plugins
         public enum huntErrorType {none ,hunterAlreadyHunting, targetAlreadyHunted, targetCooldown, huntActive};
         public void huntButton(BasePlayer player, Bounty bounty, huntErrorType error = huntErrorType.none)
         {
-            GuiContainer c = new GuiContainer(this, "huntButton", "bounty");
+            GuiContainer c = new GuiContainer(this, "huntButton", "bountyPreview");
             Rectangle ButtonPos = new Rectangle(710, 856, 500, 100, resX, resY, true);
 
             List<GuiText> textOptions = new List<GuiText>
@@ -954,7 +961,7 @@ namespace Oxide.Plugins
                 {
                     Effect.server.Run(successSound, player.transform.position);
                     bounty.startHunt(p);
-                    huntButton(player, bounty, huntErrorType.huntActive);
+                    closeBounty(player);
                 }
             };
 
@@ -965,7 +972,7 @@ namespace Oxide.Plugins
             {
                 PluginInstance.timer.Once(2f, () =>
                 {
-                    huntButton(player, bounty);
+                    if(GuiTracker.getGuiTracker(player).getContainer(this, "bountyPreview") != null) huntButton(player, bounty);
                 });
             }
         }
@@ -978,7 +985,7 @@ namespace Oxide.Plugins
 #if DEBUG
             player.ChatMessage($"closeBounty");
 #endif
-            GuiTracker.getGuiTracker(player).destroyGui(this, "bounty");
+            GuiTracker.getGuiTracker(player).destroyGui(this, "bountyPreview");
         }
 
         public void sendHunterIndicator(BasePlayer player, Hunt hunt)
@@ -986,6 +993,31 @@ namespace Oxide.Plugins
 #if DEBUG
             player.ChatMessage($"sendHunterIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
 #endif
+            GuiContainer c = new GuiContainer(this, "hunterIndicator");
+
+            //Background
+            Rectangle bgPos = new Rectangle(50, 100, 350, 150, resX, resY, true);
+            c.addPlainPanel("bg", bgPos, GuiContainer.Layer.hud, lightGrey, 0, 0, GuiContainer.Blur.medium);
+
+            //Name
+            Rectangle namePos = new Rectangle(50, 100, 350, 35, resX, resY, true);
+            string nameTextString = $"You are hunting {hunt.target.displayName}";
+            int fontsize = guiCreator.getFontsizeByFramesize(nameTextString.Length, namePos);
+            GuiText nameText = new GuiText(nameTextString, fontsize, opaqueWhite);
+            c.addText("name", namePos, GuiContainer.Layer.hud, nameText);
+
+            //Last Seen
+            Rectangle lastSeenPos = new Rectangle(50, 135, 350, 80, resX, resY, true);
+            string lastSeenString = lastSeen(hunt.target);
+            GuiText lastSeenText = new GuiText(lastSeenString, 10, opaqueWhite);
+            c.addText("lastSeen", lastSeenPos, GuiContainer.Layer.hud, lastSeenText);
+
+            //Countdown
+            Rectangle countdownPos = new Rectangle(50, 215, 350, 35, resX, resY, true);
+            GuiText countdownText = new GuiText(hunt.remaining.ToString(@"hh\:mm\:ss"), 20, opaqueWhite);
+            c.addText("countdown", countdownPos, GuiContainer.Layer.hud, countdownText);
+
+            c.display(player);
         }
 
         public void sendTargetIndicator(BasePlayer player, Hunt hunt)
@@ -993,6 +1025,36 @@ namespace Oxide.Plugins
 #if DEBUG
             player.ChatMessage($"sendTargetIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
 #endif
+            GuiContainer c = new GuiContainer(this, "targetIndicator");
+
+            //Background
+            Rectangle bgPos = new Rectangle(50, 250, 350, 100, resX, resY, true);
+            float distance = Vector3.Distance(hunt.hunter.transform.position, hunt.target.transform.position);
+            GuiColor bgColor = gradientRedYellowGreen(Mathf.Clamp((distance / config.gradientBase), 0, 1));
+            c.addPlainPanel("Background", bgPos, GuiContainer.Layer.hud, bgColor, 0, 0, GuiContainer.Blur.medium);
+
+            //TopLine
+            Rectangle topLinePos = new Rectangle(50, 250, 350, 50, resX, resY, true);
+            string TopLineString = "You are being hunted!";
+            int topLineFontsize = guiCreator.getFontsizeByFramesize(TopLineString.Length, topLinePos);
+            GuiText topLineText = new GuiText(TopLineString, topLineFontsize, opaqueWhite);
+            c.addText("topline", topLinePos, GuiContainer.Layer.hud, topLineText);
+
+            //BottomLine
+            Rectangle bottomLinePos = new Rectangle(50, 300, 350, 20, resX, resY, true);
+            string bottomLineString = "You can run, but you can't hide!";
+            int bottomLineFontsize = guiCreator.getFontsizeByFramesize(bottomLineString.Length, bottomLinePos);
+            GuiText bottomLineText = new GuiText(bottomLineString, bottomLineFontsize, opaqueWhite);
+            c.addText("bottomLine", bottomLinePos, GuiContainer.Layer.hud, bottomLineText);
+
+            //Countdown
+            Rectangle CountdownPos = new Rectangle( 50, 320, 350, 30, resX, resY, true);
+            string CountdownString = hunt.remaining.ToString(@"hh\:mm\:ss");
+            int CountdownFontsize = guiCreator.getFontsizeByFramesize(CountdownString.Length, CountdownPos);
+            GuiText CountdownText = new GuiText(CountdownString, CountdownFontsize, opaqueWhite);
+            c.addText("Countdown", CountdownPos, GuiContainer.Layer.hud, CountdownText);
+
+            c.display(player);
         }
 
         public void closeIndicators(BasePlayer player)
@@ -1000,6 +1062,16 @@ namespace Oxide.Plugins
 #if DEBUG
             player.ChatMessage($"closeIndicators: {player.displayName}");
 #endif
+            GuiTracker.getGuiTracker(player).destroyGui(this, "hunterIndicator");
+            GuiTracker.getGuiTracker(player).destroyGui(this, "targetIndicator");
+        }
+
+        public GuiColor gradientRedYellowGreen(float level)
+        {
+            float r = (level < 0.5f)?1:(1-level)*2;
+            float g = level;
+            float b = 0;
+            return new GuiColor(r, g, b, 1);
         }
     }
 }﻿namespace Oxide.Plugins
@@ -1062,6 +1134,8 @@ namespace Oxide.Plugins
                 hunterName = hunter.displayName;
                 huntTimer = PluginInstance.timer.Once((float)config.huntDuration, () => end());
                 ticker = PluginInstance.timer.Every(config.indicatorRefresh, () => tick());
+                PluginInstance.sendHunterIndicator(hunter, this);
+                PluginInstance.sendTargetIndicator(target, this);
                 HuntData.addHunt(this);
             }
 
@@ -1096,6 +1170,8 @@ namespace Oxide.Plugins
                 bounty.hunt = null;
                 HuntData.removeHunt(this);
                 CooldownData.addCooldown(target);
+                PluginInstance.closeIndicators(target);
+                PluginInstance.closeIndicators(hunter);
             }
         }
     }

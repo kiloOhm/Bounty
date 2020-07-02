@@ -58,6 +58,8 @@
                 hunterName = hunter.displayName;
                 huntTimer = PluginInstance.timer.Once((float)config.huntDuration, () => end());
                 ticker = PluginInstance.timer.Every(config.indicatorRefresh, () => tick());
+                PluginInstance.sendHunterIndicator(hunter, this);
+                PluginInstance.sendTargetIndicator(target, this);
                 HuntData.addHunt(this);
             }
 
@@ -92,6 +94,8 @@
                 bounty.hunt = null;
                 HuntData.removeHunt(this);
                 CooldownData.addCooldown(target);
+                PluginInstance.closeIndicators(target);
+                PluginInstance.closeIndicators(hunter);
             }
         }
     }

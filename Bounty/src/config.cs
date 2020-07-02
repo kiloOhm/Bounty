@@ -29,6 +29,9 @@
             [JsonProperty(PropertyName = "Hunt indicator refresh interval")]
             public int indicatorRefresh;
 
+            [JsonProperty(PropertyName = "Base safe distance for target indicator background color gradient calculation")]
+            public int gradientBase;
+
             [JsonProperty(PropertyName = "Pay out reward to target if hunter dies")]
             public bool targetPayout;
 
@@ -53,6 +56,7 @@
                 targetCooldown = 7200,
                 huntDuration = 7200,
                 indicatorRefresh = 5,
+                gradientBase = 300,
                 targetPayout = true,
                 broadcastHunt = true,
                 showSteamImage = true,
