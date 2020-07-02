@@ -61,6 +61,7 @@
                 PluginInstance.sendHunterIndicator(hunter, this);
                 PluginInstance.sendTargetIndicator(target, this);
                 HuntData.addHunt(this);
+                PluginInstance.LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt started: {hunter.displayName} -> {target.displayName}", PluginInstance);
             }
 
             public void tick()

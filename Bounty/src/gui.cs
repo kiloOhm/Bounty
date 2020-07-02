@@ -317,8 +317,8 @@
                 {
                     Effect.server.Run(successSound, player.transform.position);
                     bounty.startHunt(p);
-                    player.GetActiveItem()?.Remove();
                     BountyData.removeBounty(bounty.noteUid);
+                    player.GetActiveItem()?.Remove();
                     closeBounty(player);
                 }
             };
@@ -429,18 +429,24 @@
         {
             guiCreator.customGameTip(hunt.hunter, "The hunt is over. Better luck next time!", 5);
             guiCreator.customGameTip(hunt.target, "The hunt is over. You're safe... for now...", 5);
+
+            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt expired: {hunt.hunter.displayName} -> {hunt.target.displayName}", this);
         }
 
         public void huntSuccessfullMsg(Hunt hunt)
         {
             guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.target}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
             if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunter.displayName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.target.displayName}'s head!</color>\nRIP {hunt.target.displayName}!");
+
+            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt successful: {hunt.hunter.displayName} -> {hunt.target.displayName} ", this);
         }
 
         public void huntFailedMsg(Hunt hunt)
         {
             guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunter}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
             if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.target.displayName} fends off his hunter {hunt.hunter.displayName} and claims {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english}</color>\nBetter luck next time {hunt.hunter.displayName}!");
+
+            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")}Hunt failed: {hunt.hunter.displayName} -> {hunt.target.displayName}", this);
         }
 
         public GuiColor gradientRedYellowGreen(float level)

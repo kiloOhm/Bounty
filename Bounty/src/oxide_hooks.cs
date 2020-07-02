@@ -107,7 +107,7 @@
             return null;
         }
 
-        private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
+        private void OnActiveItemChanged(BasePlayer player, Item newItem, Item oldItem)
         {
             if (player == null) return;
             if (newItem != null)
@@ -127,10 +127,8 @@
 
         object OnPlayerDeath(BasePlayer victim, HitInfo info)
         {
-            BasePlayer killer = null;
-            if (victim?.lastAttacker == null) return null;
-            if (victim?.lastAttacker is BasePlayer) killer = victim.lastAttacker as BasePlayer;
-            if (killer = null) return null;
+            BasePlayer killer = info?.InitiatorPlayer;
+            if (killer == null) return null;
 
 #if DEBUG
             PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");

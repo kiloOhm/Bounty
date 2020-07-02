@@ -8,13 +8,13 @@
         partial void initCommands()
         {
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
-            cmd.AddChatCommand("test", this, nameof(testCommand));
-            cmd.AddConsoleCommand("bounties.test", this, nameof(consoleTestCommand));
+            //cmd.AddChatCommand("test", this, nameof(testCommand));
+            //cmd.AddConsoleCommand("bounties.test", this, nameof(consoleTestCommand));
         }
 
         private void bountyCommand(BasePlayer player, string command, string[] args)
         {
-            if (!player.IPlayer.HasPermission("bounties.use"))
+            if (!hasPermission(player, permissions.use))
             {
                 PrintToChat(player, lang.GetMessage("noPermission", this, player.UserIDString));
                 return;
@@ -29,6 +29,12 @@
             {
                 case "add":
                 case "place":
+                    if (!hasPermission(player, permissions.admin))
+                    {
+                        PrintToChat(player, lang.GetMessage("noPermission", this, player.UserIDString));
+                        return;
+                    }
+
                     //bounty add name reward reason
                     if (args.Length != 4)
                     {

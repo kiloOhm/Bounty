@@ -16,6 +16,7 @@ namespace Oxide.Plugins
     partial class bounties : RustPlugin
     {
         private static Plugins.bounties PluginInstance;
+        const string logFileName = "bounties";
 
         public bounties()
         {

@@ -15,7 +15,8 @@
 
         private enum permissions
         {
-            use
+            use,
+            admin
         }
 
         private bool hasPermission(BasePlayer player, permissions perm)

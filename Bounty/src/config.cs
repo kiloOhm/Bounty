@@ -59,7 +59,7 @@
                 targetCooldown = 7200,
                 huntDuration = 7200,
                 indicatorRefresh = 5,
-                gradientBase = 300,
+                gradientBase = 800,
                 showHunter = true,
                 broadcastHunt = true,
                 showSteamImage = true,
