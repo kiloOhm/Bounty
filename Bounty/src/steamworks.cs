@@ -24,7 +24,7 @@
             public string avatarfull;
         }
 
-        public void GetPlayerSummary(ulong steamID, Action<PlayerSummary> callback)
+        public void GetSteamUserData(ulong steamID, Action<PlayerSummary> callback)
         {
             if(string.IsNullOrEmpty(config.steamAPIKey))
             {

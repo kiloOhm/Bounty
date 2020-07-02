@@ -58,6 +58,8 @@
                 }
             }
 
+            public TimeSpan timeSinceCreation => DateTime.Now - timestamp;
+
             public Bounty(BasePlayer placer, BasePlayer target, int reward, string reason)
             {
                 timestamp = DateTime.Now;
@@ -69,6 +71,13 @@
                 this.reason = reason;
 
                 noteUid = giveNote(placer);
+
+                if(config.showSteamImage)
+                {
+                    PluginInstance.GetSteamUserData(targetID, (ps) =>
+                        PluginInstance.guiCreator.registerImage(PluginInstance, targetID.ToString(), ps.avatarfull)
+                    );
+                }
 
                 BountyData.AddBounty(this);
             }

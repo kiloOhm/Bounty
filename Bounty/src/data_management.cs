@@ -9,17 +9,13 @@
     using System.Text;
     using UnityEngine;
 
-    /*
-     Make sure that you're not saving complex classes like BasePlayer or Item. Try to stick with primitive types.
-     If you're saving your own classes, make sure they have a default constructor and that all properties you're saving are public.
-     Take control of which/how properties get serialized by using the Newtonsoft.Json Attributes https://www.newtonsoft.com/json/help/html/SerializationAttributes.htm
-    */
-
     partial class bounties : RustPlugin
     {
         partial void initData()
         {
             BountyData.init();
+            HuntData.init();
+            CooldownData.init();
         }
 
         [JsonObject(MemberSerialization.OptIn)]
@@ -118,13 +114,17 @@
             public static Hunt getHuntByHunter(BasePlayer player)
             {
                 if (!initialized) init();
-                return instance.hunts.Where((h) => h.hunterID == player.userID).First();
+                List<Hunt> results = instance.hunts.Where((h) => h.hunterID == player.userID).ToList();
+                if (results.Count == 0) return null;
+                return results.First();
             }
 
             public static Hunt getHuntByTarget(BasePlayer player)
             {
                 if (!initialized) init();
-                return instance.hunts.Where((h) => h.bounty.targetID == player.userID).First();
+                List<Hunt> results = instance.hunts.Where((h) => h.bounty.targetID == player.userID).ToList();
+                if (results.Count == 0) return null;
+                return results.First();
             }
 
             public static void addHunt(Hunt hunt)
@@ -158,7 +158,7 @@
                 }
                 catch (Exception E)
                 {
-                    StringBuilder sb = new StringBuilder($"saving {typeof(BountyData).Name} failed. Are you trying to save complex classes like BasePlayer or Item? that won't work!\n");
+                    StringBuilder sb = new StringBuilder($"saving {typeof(HuntData).Name} failed. Are you trying to save complex classes like BasePlayer or Item? that won't work!\n");
                     sb.Append(E.Message);
                     PluginInstance.Puts(sb.ToString());
                 }
@@ -172,7 +172,76 @@
                 }
                 catch (Exception E)
                 {
-                    StringBuilder sb = new StringBuilder($"loading {typeof(BountyData).Name} failed. Make sure that all classes you're saving have a default constructor!\n");
+                    StringBuilder sb = new StringBuilder($"loading {typeof(HuntData).Name} failed. Make sure that all classes you're saving have a default constructor!\n");
+                    sb.Append(E.Message);
+                    PluginInstance.Puts(sb.ToString());
+                }
+            }
+        }
+
+        [JsonObject(MemberSerialization.OptIn)]
+        private class CooldownData
+        {
+            private static DynamicConfigFile CooldownDataFile;
+            private static CooldownData instance;
+            private static bool initialized = false;
+
+            [JsonProperty(PropertyName = "Cooldowns")]
+            private Dictionary<ulong, DateTime> cooldowns = new Dictionary<ulong, DateTime>();
+
+            public CooldownData() { }
+
+            public static void addCooldown(BasePlayer player)
+            {
+                if (instance.cooldowns.ContainsKey(player.userID)) return;
+                instance.cooldowns.Add(player.userID, DateTime.Now);
+                save();
+            }
+
+            public static bool isOnCooldown(BasePlayer player)
+            {
+                if (!instance.cooldowns.ContainsKey(player.userID)) return false;
+                if ((DateTime.Now - instance.cooldowns[player.userID]).TotalSeconds < config.targetCooldown) return true;
+                else
+                {
+                    instance.cooldowns.Remove(player.userID);
+                    save();
+                }
+                return false;
+            }
+
+            public static void init()
+            {
+                if (initialized) return;
+                CooldownDataFile = Interface.Oxide.DataFileSystem.GetFile("bounties/Cooldowns");
+                load();
+                initialized = true;
+            }
+
+            public static void save()
+            {
+                if (!initialized) init();
+                try
+                {
+                    CooldownDataFile.WriteObject(instance);
+                }
+                catch (Exception E)
+                {
+                    StringBuilder sb = new StringBuilder($"saving {typeof(CooldownData).Name} failed. Are you trying to save complex classes like BasePlayer or Item? that won't work!\n");
+                    sb.Append(E.Message);
+                    PluginInstance.Puts(sb.ToString());
+                }
+            }
+
+            public static void load()
+            {
+                try
+                {
+                    instance = CooldownDataFile.ReadObject<CooldownData>();
+                }
+                catch (Exception E)
+                {
+                    StringBuilder sb = new StringBuilder($"loading {typeof(CooldownData).Name} failed. Make sure that all classes you're saving have a default constructor!\n");
                     sb.Append(E.Message);
                     PluginInstance.Puts(sb.ToString());
                 }

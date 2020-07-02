@@ -1,8 +1,10 @@
 ﻿namespace Oxide.Plugins
 {
     using Facepunch.Extend;
+    using Steamworks.Data;
     using System;
     using System.Collections.Generic;
+    using System.Text;
     using UnityEngine;
     using static Oxide.Plugins.GUICreator;
 
@@ -27,22 +29,208 @@
 
         GuiColor darkRed = new GuiColor(65, 33, 32, 0.8f);
         GuiColor lightRed = new GuiColor(162, 51, 46, 0.8f);
+
+        const string errorSound = "assets/prefabs/locks/keypad/effects/lock.code.denied.prefab";
+        const string successSound = "assets/prefabs/locks/keypad/effects/lock.code.updated.prefab";
+
         #endregion
 
         #region bounty creator
 
+        public class BountyBP
+        {
+            public BasePlayer target = null;
+            public int reward = 0;
+            public string reason = "";
+
+            public void init(BasePlayer placer)
+            {
+                new Bounty(placer, target, reward, reason);
+            }
+        }
+
         public void sendCreator(BasePlayer player)
         {
+#if DEBUG
+            player.ChatMessage($"sendCreator");
+#endif
+            BountyBP bp = new BountyBP();
+            GuiContainer c = new GuiContainer(this, "bountyCreator");
 
+            //template
+            Rectangle templatePos = new Rectangle(623, 26, 673, 854, resX, resY, true);
+            c.addImage("template", templatePos, "bounty_template", GuiContainer.Layer.hud, FadeIn: FadeIn, FadeOut: FadeOut);
+
+            //targetName
+            Rectangle targetNamePos = new Rectangle(680, 250, 100, 53, resX, resY, true);
+            Rectangle targetNamePosInput = new Rectangle(780, 250, 460, 53, resX, resY, true);
+            c.addText("targetNameHeader", targetNamePos, GuiContainer.Layer.hud, new GuiText("Target:", 20), FadeIn, FadeOut);
+            Action<BasePlayer, string[]> targetNameCB = (p, a) => 
+            {
+                if (a.Length < 1) return;
+                BasePlayer target = findPlayer(a[0], player);
+                if (target == null)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.missingTarget, bp);
+                    return;
+                }
+                bp.target = target;
+                GuiTracker.getGuiTracker(player).destroyGui(this, c, "targetName");
+                int fontsize = guiCreator.getFontsizeByFramesize(target.displayName.Length, targetNamePosInput);
+                GuiText targetNameText = new GuiText(target.displayName, fontsize);
+                GuiContainer c2 = new GuiContainer(this, "tfound", "bountyCreator");
+                c2.addText("targetName", targetNamePosInput, GuiContainer.Layer.hud, targetNameText, FadeIn, FadeOut);
+                c2.display(player);
+                Effect.server.Run(successSound, player.transform.position);
+
+                //image
+                if (config.showSteamImage)
+                {
+                    GetSteamUserData(target.userID, (ps) =>
+                    {
+                        guiCreator.registerImage(this, target.userID.ToString(), ps.avatarfull, () =>
+                        {
+                            Rectangle imagePos = new Rectangle(828, 315, 264, 264, resX, resY, true);
+                            GuiContainer c3 = new GuiContainer(this, "image", "bountyCreator");
+                            c3.addImage("image", imagePos, target.userID.ToString(), GuiContainer.Layer.hud, FadeIn: FadeIn, FadeOut: FadeOut);
+                            c3.display(player);
+                            player.ChatMessage("sent image");
+                        });
+                    });
+                }
+                
+            };
+            c.addInput("targetName", targetNamePosInput, targetNameCB, GuiContainer.Layer.hud, panelColor: new GuiColor("white"), text: new GuiText("", 20, new GuiColor("black")), FadeOut: FadeOut, FadeIn: FadeIn);
+
+            //reward
+            ItemDefinition itemDefinition = ItemManager.FindItemDefinition(config.currency);
+            Rectangle rewardPosInput = new Rectangle(828, 579, 132, 53, resX, resY, true);
+            Rectangle rewardPosCurrency = new Rectangle(970, 579, 122, 53, resX, resY, true);
+            Action<BasePlayer, string[]> rewardCB = (p, a) => 
+            {
+                if (a.Length < 1) return;
+                int reward = 0;
+                if (!int.TryParse(a[0], out reward))
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.badReward, bp);
+                    return;
+                }
+                if (reward < config.minReward)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.badReward, bp);
+                    return;
+                }
+                if(player.inventory.GetAmount(itemDefinition.itemid) < reward)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.cantAfford, bp);
+                    return;
+                }
+                bp.reward = reward;
+                GuiTracker.getGuiTracker(player).destroyGui(this, c, "reward");
+                GuiContainer c2 = new GuiContainer(this, "rewardok", "bountyCreator");
+                c2.addText("reward", rewardPosInput, GuiContainer.Layer.hud, new GuiText(reward.ToString(), 24, align: TextAnchor.MiddleRight), FadeIn, FadeOut);
+                c2.display(player);
+                Effect.server.Run(successSound, player.transform.position);
+            };
+            c.addInput("reward", rewardPosInput, rewardCB, GuiContainer.Layer.hud, panelColor: new GuiColor("white"), text: new GuiText("", 22, new GuiColor("black")), FadeOut: FadeOut, FadeIn: FadeIn);
+            c.addText("rewardCurrency", rewardPosCurrency, GuiContainer.Layer.hud, new GuiText(itemDefinition.displayName.english, 24, new GuiColor("black"), TextAnchor.MiddleLeft), FadeIn, FadeOut);
+
+            //reason
+            Rectangle reasonPos = new Rectangle(680, 681, 100, 53, resX, resY, true);
+            Rectangle reasonPosInput = new Rectangle(780, 681, 460, 53, resX, resY, true);
+            c.addText("reasonHeader", reasonPos, GuiContainer.Layer.hud, new GuiText("Reason:", 20), FadeIn, FadeOut);
+            Action<BasePlayer, string[]> reasonCB = (p, a) => 
+            {
+                if (a.Length < 1) return;
+                StringBuilder sb = new StringBuilder();
+                foreach(string s in a)
+                {
+                    sb.Append($"{s} ");
+                }
+                bp.reason = sb.ToString().Trim();
+            };
+            c.addInput("reason", reasonPosInput, reasonCB, GuiContainer.Layer.hud, panelColor: new GuiColor("white"), text: new GuiText("", 14, new GuiColor("black")), FadeOut: FadeOut, FadeIn: FadeIn);
+
+            //placerName
+            Rectangle placerNamePos = new Rectangle(680, 771, 560, 36, resX, resY, true);
+            GuiText placerNameText = new GuiText(player.displayName, guiCreator.getFontsizeByFramesize(player.displayName.Length, placerNamePos));
+            c.addText("placerName", placerNamePos, GuiContainer.Layer.hud, placerNameText, FadeIn, FadeOut);
+
+            //exitButton
+            Rectangle closeButtonPos = new Rectangle(1296, 52, 60, 60, resX, resY, true);
+            c.addButton("close", closeButtonPos, GuiContainer.Layer.hud, darkRed, FadeIn, FadeOut, new GuiText("X", 24, lightRed), blur: GuiContainer.Blur.medium);
+
+            c.display(player);
+
+            //button
+            creatorButton(player, bp: bp);
+        }
+
+        public enum createErrorType { none, missingTarget, badReward, cantAfford, missingReason };
+        public void creatorButton(BasePlayer player, createErrorType error = createErrorType.none, BountyBP bp = null)
+        {
+            GuiContainer c = new GuiContainer(this, "createButton", "bountyCreator");
+            Rectangle ButtonPos = new Rectangle(710, 856, 500, 100, resX, resY, true);
+
+            List<GuiText> textOptions = new List<GuiText>
+            {
+                new GuiText("Create Bounty", guiCreator.getFontsizeByFramesize(13, ButtonPos), lightGreen),
+                new GuiText("Target not found!", guiCreator.getFontsizeByFramesize(17, ButtonPos), lightRed),
+                new GuiText("Invalid reward!", guiCreator.getFontsizeByFramesize(15, ButtonPos), lightRed),
+                new GuiText("Can't afford reward!", guiCreator.getFontsizeByFramesize(20, ButtonPos), lightRed),
+                new GuiText("Reason can't be empty!", guiCreator.getFontsizeByFramesize(22, ButtonPos), lightRed)
+            };
+
+            Action<BasePlayer, string[]> cb = (p, a) =>
+            {
+                if (bp.target == null)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.missingTarget, bp);
+                }
+                else if(bp.reward == 0)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.badReward, bp);
+                }
+                else if (config.requireReason && string.IsNullOrEmpty(bp.reason))
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.missingReason, bp);
+                }
+                else
+                {
+                    Effect.server.Run(successSound, player.transform.position);
+                    bp.init(player);
+                    GuiTracker.getGuiTracker(player).destroyGui(this, "bountyCreator");
+                }
+            };
+
+            c.addPlainButton("button", ButtonPos, GuiContainer.Layer.hud, (error == createErrorType.none) ? darkGreen : darkRed, FadeIn, FadeOut, textOptions[(int)error], cb, blur: GuiContainer.Blur.medium);
+            c.display(player);
+
+            if (error != createErrorType.none)
+            {
+                PluginInstance.timer.Once(2f, () =>
+                {
+                    creatorButton(player, bp: bp);
+                });
+            }
         }
 
         #endregion
 
+        #region bounty
         public void sendBounty(BasePlayer player, Bounty bounty)
         {
 #if DEBUG
             player.ChatMessage($"sendBounty: {bounty.placerName} -> {bounty.targetName}");
 #endif
+            closeBounty(player);
             GuiContainer c = new GuiContainer(this, "bounty");
 
             //template
@@ -54,7 +242,14 @@
             int fontsize = guiCreator.getFontsizeByFramesize(bounty.targetName.Length, targetNamePos);
             GuiText targetNameText = new GuiText(bounty.targetName, fontsize);
             c.addText("targetName", targetNamePos, GuiContainer.Layer.hud, targetNameText, FadeIn, FadeOut);
-           
+
+            //image
+            if(config.showSteamImage)
+            {
+                Rectangle imagePos = new Rectangle(828, 315, 264, 264, resX, resY, true);
+                c.addImage("image", imagePos, bounty.targetID.ToString(), GuiContainer.Layer.hud, FadeIn: FadeIn, FadeOut: FadeOut);
+            }
+
             //reward
             Rectangle rewardPos = new Rectangle(680, 579, 560, 53, resX, resY, true);
             string reward = $"{bounty.rewardAmount} {bounty.reward.info.displayName.english}";
@@ -72,12 +267,13 @@
             c.addText("placerName", placerNamePos, GuiContainer.Layer.hud, placerNameText, FadeIn, FadeOut);
 
             //button
-            huntButton(player, bounty);
+            if (bounty.hunt != null) huntButton(player, bounty, huntErrorType.huntActive);
+            else huntButton(player, bounty);
 
             c.display(player);
         }
 
-        public enum huntErrorType {none ,hunterAlreadyHunting, hunterCooldown , targetAlreadyHunted, targetCooldown};
+        public enum huntErrorType {none ,hunterAlreadyHunting, targetAlreadyHunted, targetCooldown, huntActive};
         public void huntButton(BasePlayer player, Bounty bounty, huntErrorType error = huntErrorType.none)
         {
             GuiContainer c = new GuiContainer(this, "huntButton", "bounty");
@@ -86,52 +282,51 @@
             List<GuiText> textOptions = new List<GuiText>
             {
                 new GuiText("Start Hunting", guiCreator.getFontsizeByFramesize(13, ButtonPos), lightGreen),
-                new GuiText("You are already hunting someone else", guiCreator.getFontsizeByFramesize(36, ButtonPos), lightRed),
-                new GuiText("You need to wait until you can hunt again", guiCreator.getFontsizeByFramesize(41, ButtonPos), lightRed),
+                new GuiText("You are already hunting", guiCreator.getFontsizeByFramesize(23, ButtonPos), lightRed),
                 new GuiText("Target is already being hunted", guiCreator.getFontsizeByFramesize(30, ButtonPos), lightRed),
-                new GuiText("Target can't be hunted yet", guiCreator.getFontsizeByFramesize(26, ButtonPos), lightRed)
+                new GuiText("Target can't be hunted yet", guiCreator.getFontsizeByFramesize(26, ButtonPos), lightRed),
+                new GuiText("Hunt Active", guiCreator.getFontsizeByFramesize(11, ButtonPos), lightRed),
             };
 
             Action<BasePlayer, string[]> cb = (p, a) =>
             {
-                if (bounty.hunt != null || HuntData.getHuntByHunter(p) != null)
+                if (error == huntErrorType.huntActive) return;
+                else if (bounty.hunt != null || HuntData.getHuntByHunter(p) != null)
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                    Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.hunterAlreadyHunting);
-                }
-                else if(false) //hunterCooldown
-                {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
-                    huntButton(player, bounty, huntErrorType.hunterCooldown);
                 }
                 else if(HuntData.getHuntByTarget(bounty.target) != null)
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                    Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetAlreadyHunted);
                 }
-                else if(false) //targetCooldown
+                else if(bounty.timeSinceCreation.TotalSeconds < config.creationCooldown || CooldownData.isOnCooldown(bounty.target))
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                    Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetCooldown);
                 }
                 else
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.updated.prefab", player.transform.position);
+                    Effect.server.Run(successSound, player.transform.position);
                     bounty.startHunt(p);
+                    huntButton(player, bounty, huntErrorType.huntActive);
                 }
             };
 
-            Action<BasePlayer, string[]> errorCB = (p, a) =>
+            c.addPlainButton("button", ButtonPos, GuiContainer.Layer.hud, (error == huntErrorType.none)?darkGreen:darkRed, FadeIn, FadeOut, textOptions[(int)error], cb, blur: GuiContainer.Blur.medium);
+            c.display(player);
+
+            if (error != huntErrorType.none && error != huntErrorType.huntActive)
             {
                 PluginInstance.timer.Once(2f, () =>
                 {
                     huntButton(player, bounty);
                 });
-            };
-
-            c.addPlainButton("button", ButtonPos, GuiContainer.Layer.hud, (error == huntErrorType.none)?darkGreen:darkRed, FadeIn, FadeOut, textOptions[(int)error], cb);
-            c.display(player);
+            }
         }
+
+        #endregion
 
         public void closeBounty(BasePlayer player)
         {

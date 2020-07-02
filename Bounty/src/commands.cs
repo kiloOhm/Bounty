@@ -7,7 +7,7 @@
         partial void initCommands()
         {
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
-            cmd.AddChatCommand("test2", this, nameof(testCommand));
+            cmd.AddChatCommand("test", this, nameof(testCommand));
             cmd.AddConsoleCommand("bounties.test", this, nameof(consoleTestCommand));
         }
 
@@ -19,7 +19,11 @@
                 return;
             }
 
-            if (args.Length == 0) return;
+            if (args.Length == 0)
+            {
+                sendCreator(player);
+                return;
+            }
             switch (args[0])
             {
                 case "add":
@@ -51,7 +55,7 @@
 
         private void testCommand(BasePlayer player, string command, string[] args)
         {
-            GetPlayerSummary(ulong.Parse(args[0]), (ps) => 
+            GetSteamUserData(ulong.Parse(args[0]), (ps) => 
             {
                 if (ps == null) return;
                 player.ChatMessage(ps.personaname);
@@ -60,7 +64,7 @@
 
         private void consoleTestCommand(ConsoleSystem.Arg arg)
         {
-            GetPlayerSummary(ulong.Parse(arg.Args[0]), (ps) =>
+            GetSteamUserData(ulong.Parse(arg.Args[0]), (ps) =>
             {
                 if (ps == null) return;
                 SendReply(arg, ps.personaname);

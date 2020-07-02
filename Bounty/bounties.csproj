@@ -290,7 +290,7 @@
   </ItemGroup>
 	
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="cd $(ProjectDir)&#xD;&#xA;del $(ProjectDir)build\$(ProjectName).cs&#xD;&#xA;copy $(ProjectDir)$(ProjectName).cs $(ProjectDir)build&#xD;&#xA;for /r $(ProjectDir)src %25%25F in (*.cs) do @type &quot;%25%25F&quot; &gt;&gt; $(ProjectDir)build\$(ProjectName).cs" />
+    <Exec Command="cd $(ProjectDir)&#xD;&#xA;del $(ProjectDir)build\$(ProjectName).cs&#xD;&#xA;copy $(ProjectDir)$(ProjectName).cs $(ProjectDir)build&#xD;&#xA;for /r $(ProjectDir)src %25%25F in (*.cs) do @type &quot;%25%25F&quot; &gt;&gt; $(ProjectDir)build\$(ProjectName).cs&#xD;&#xA;copy $(ProjectDir)build\$(ProjectName).cs C:\Users\Lukas\Desktop\rustserver\oxide\plugins" />
   </Target>
 
 </Project>

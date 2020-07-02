@@ -17,17 +17,29 @@
             [JsonProperty(PropertyName = "Minimum reward amount")]
             public int minReward;
 
-            [JsonProperty(PropertyName = "Hunting cooldown in seconds")]
+            [JsonProperty(PropertyName = "Hunting cooldown after creating a bounty in seconds")]
+            public int creationCooldown;
+
+            [JsonProperty(PropertyName = "Hunting cooldown after being hunted in seconds")]
             public int targetCooldown;
 
             [JsonProperty(PropertyName = "Hunt Duration")]
             public int huntDuration;
+
+            [JsonProperty(PropertyName = "Hunt indicator refresh interval")]
+            public int indicatorRefresh;
 
             [JsonProperty(PropertyName = "Pay out reward to target if hunter dies")]
             public bool targetPayout;
 
             [JsonProperty(PropertyName = "Broadcast hunt conclusion in global chat")]
             public bool broadcastHunt;
+
+            [JsonProperty(PropertyName = "Show steam profile picture of target on bounty")]
+            public bool showSteamImage;
+
+            [JsonProperty(PropertyName = "Require reason for bounties")]
+            public bool requireReason;
         }
 
         private ConfigData getDefaultConfig()
@@ -37,10 +49,14 @@
                 steamAPIKey = "",
                 currency = "scrap",
                 minReward = 100,
+                creationCooldown = 1200,
                 targetCooldown = 7200,
                 huntDuration = 7200,
+                indicatorRefresh = 5,
                 targetPayout = true,
-                broadcastHunt = true
+                broadcastHunt = true,
+                showSteamImage = true,
+                requireReason = true
             };
         }
 

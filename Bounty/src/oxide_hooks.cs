@@ -108,17 +108,6 @@
         private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
         {
             if (player == null) return;
-            if (oldItem != null)
-            {
-                if (oldItem?.info?.shortname == "note" && oldItem.HasFlag(global::Item.Flag.OnFire))
-                {
-                    Bounty bounty = BountyData.GetBounty(oldItem.uid);
-                    if (bounty != null)
-                    {
-                        closeBounty(player);
-                    }
-                }
-            }
             if (newItem != null)
             {
                 if (newItem?.info?.shortname == "note" && newItem.HasFlag(global::Item.Flag.OnFire))
@@ -127,9 +116,11 @@
                     if (bounty != null)
                     {
                         sendBounty(player, bounty);
+                        return;
                     }
                 }
             }
+            closeBounty(player);
         }
     }
 }

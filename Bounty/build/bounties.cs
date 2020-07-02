@@ -190,6 +190,8 @@ namespace Oxide.Plugins
                 }
             }
 
+            public TimeSpan timeSinceCreation => DateTime.Now - timestamp;
+
             public Bounty(BasePlayer placer, BasePlayer target, int reward, string reason)
             {
                 timestamp = DateTime.Now;
@@ -201,6 +203,13 @@ namespace Oxide.Plugins
                 this.reason = reason;
 
                 noteUid = giveNote(placer);
+
+                if(config.showSteamImage)
+                {
+                    PluginInstance.GetSteamUserData(targetID, (ps) =>
+                        PluginInstance.guiCreator.registerImage(PluginInstance, targetID.ToString(), ps.avatarfull)
+                    );
+                }
 
                 BountyData.AddBounty(this);
             }
@@ -236,7 +245,7 @@ namespace Oxide.Plugins
         partial void initCommands()
         {
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
-            cmd.AddChatCommand("test2", this, nameof(testCommand));
+            cmd.AddChatCommand("test", this, nameof(testCommand));
             cmd.AddConsoleCommand("bounties.test", this, nameof(consoleTestCommand));
         }
 
@@ -248,7 +257,11 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (args.Length == 0) return;
+            if (args.Length == 0)
+            {
+                sendCreator(player);
+                return;
+            }
             switch (args[0])
             {
                 case "add":
@@ -280,7 +293,7 @@ namespace Oxide.Plugins
 
         private void testCommand(BasePlayer player, string command, string[] args)
         {
-            GetPlayerSummary(ulong.Parse(args[0]), (ps) => 
+            GetSteamUserData(ulong.Parse(args[0]), (ps) => 
             {
                 if (ps == null) return;
                 player.ChatMessage(ps.personaname);
@@ -289,7 +302,7 @@ namespace Oxide.Plugins
 
         private void consoleTestCommand(ConsoleSystem.Arg arg)
         {
-            GetPlayerSummary(ulong.Parse(arg.Args[0]), (ps) =>
+            GetSteamUserData(ulong.Parse(arg.Args[0]), (ps) =>
             {
                 if (ps == null) return;
                 SendReply(arg, ps.personaname);
@@ -315,17 +328,29 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Minimum reward amount")]
             public int minReward;
 
-            [JsonProperty(PropertyName = "Hunting cooldown in seconds")]
+            [JsonProperty(PropertyName = "Hunting cooldown after creating a bounty in seconds")]
+            public int creationCooldown;
+
+            [JsonProperty(PropertyName = "Hunting cooldown after being hunted in seconds")]
             public int targetCooldown;
 
             [JsonProperty(PropertyName = "Hunt Duration")]
             public int huntDuration;
+
+            [JsonProperty(PropertyName = "Hunt indicator refresh interval")]
+            public int indicatorRefresh;
 
             [JsonProperty(PropertyName = "Pay out reward to target if hunter dies")]
             public bool targetPayout;
 
             [JsonProperty(PropertyName = "Broadcast hunt conclusion in global chat")]
             public bool broadcastHunt;
+
+            [JsonProperty(PropertyName = "Show steam profile picture of target on bounty")]
+            public bool showSteamImage;
+
+            [JsonProperty(PropertyName = "Require reason for bounties")]
+            public bool requireReason;
         }
 
         private ConfigData getDefaultConfig()
@@ -335,10 +360,14 @@ namespace Oxide.Plugins
                 steamAPIKey = "",
                 currency = "scrap",
                 minReward = 100,
+                creationCooldown = 1200,
                 targetCooldown = 7200,
                 huntDuration = 7200,
+                indicatorRefresh = 5,
                 targetPayout = true,
-                broadcastHunt = true
+                broadcastHunt = true,
+                showSteamImage = true,
+                requireReason = true
             };
         }
 
@@ -374,17 +403,13 @@ namespace Oxide.Plugins
     using System.Text;
     using UnityEngine;
 
-    /*
-     Make sure that you're not saving complex classes like BasePlayer or Item. Try to stick with primitive types.
-     If you're saving your own classes, make sure they have a default constructor and that all properties you're saving are public.
-     Take control of which/how properties get serialized by using the Newtonsoft.Json Attributes https://www.newtonsoft.com/json/help/html/SerializationAttributes.htm
-    */
-
     partial class bounties : RustPlugin
     {
         partial void initData()
         {
             BountyData.init();
+            HuntData.init();
+            CooldownData.init();
         }
 
         [JsonObject(MemberSerialization.OptIn)]
@@ -483,13 +508,17 @@ namespace Oxide.Plugins
             public static Hunt getHuntByHunter(BasePlayer player)
             {
                 if (!initialized) init();
-                return instance.hunts.Where((h) => h.hunterID == player.userID).First();
+                List<Hunt> results = instance.hunts.Where((h) => h.hunterID == player.userID).ToList();
+                if (results.Count == 0) return null;
+                return results.First();
             }
 
             public static Hunt getHuntByTarget(BasePlayer player)
             {
                 if (!initialized) init();
-                return instance.hunts.Where((h) => h.bounty.targetID == player.userID).First();
+                List<Hunt> results = instance.hunts.Where((h) => h.bounty.targetID == player.userID).ToList();
+                if (results.Count == 0) return null;
+                return results.First();
             }
 
             public static void addHunt(Hunt hunt)
@@ -523,7 +552,7 @@ namespace Oxide.Plugins
                 }
                 catch (Exception E)
                 {
-                    StringBuilder sb = new StringBuilder($"saving {typeof(BountyData).Name} failed. Are you trying to save complex classes like BasePlayer or Item? that won't work!\n");
+                    StringBuilder sb = new StringBuilder($"saving {typeof(HuntData).Name} failed. Are you trying to save complex classes like BasePlayer or Item? that won't work!\n");
                     sb.Append(E.Message);
                     PluginInstance.Puts(sb.ToString());
                 }
@@ -537,7 +566,76 @@ namespace Oxide.Plugins
                 }
                 catch (Exception E)
                 {
-                    StringBuilder sb = new StringBuilder($"loading {typeof(BountyData).Name} failed. Make sure that all classes you're saving have a default constructor!\n");
+                    StringBuilder sb = new StringBuilder($"loading {typeof(HuntData).Name} failed. Make sure that all classes you're saving have a default constructor!\n");
+                    sb.Append(E.Message);
+                    PluginInstance.Puts(sb.ToString());
+                }
+            }
+        }
+
+        [JsonObject(MemberSerialization.OptIn)]
+        private class CooldownData
+        {
+            private static DynamicConfigFile CooldownDataFile;
+            private static CooldownData instance;
+            private static bool initialized = false;
+
+            [JsonProperty(PropertyName = "Cooldowns")]
+            private Dictionary<ulong, DateTime> cooldowns = new Dictionary<ulong, DateTime>();
+
+            public CooldownData() { }
+
+            public static void addCooldown(BasePlayer player)
+            {
+                if (instance.cooldowns.ContainsKey(player.userID)) return;
+                instance.cooldowns.Add(player.userID, DateTime.Now);
+                save();
+            }
+
+            public static bool isOnCooldown(BasePlayer player)
+            {
+                if (!instance.cooldowns.ContainsKey(player.userID)) return false;
+                if ((DateTime.Now - instance.cooldowns[player.userID]).TotalSeconds < config.targetCooldown) return true;
+                else
+                {
+                    instance.cooldowns.Remove(player.userID);
+                    save();
+                }
+                return false;
+            }
+
+            public static void init()
+            {
+                if (initialized) return;
+                CooldownDataFile = Interface.Oxide.DataFileSystem.GetFile("bounties/Cooldowns");
+                load();
+                initialized = true;
+            }
+
+            public static void save()
+            {
+                if (!initialized) init();
+                try
+                {
+                    CooldownDataFile.WriteObject(instance);
+                }
+                catch (Exception E)
+                {
+                    StringBuilder sb = new StringBuilder($"saving {typeof(CooldownData).Name} failed. Are you trying to save complex classes like BasePlayer or Item? that won't work!\n");
+                    sb.Append(E.Message);
+                    PluginInstance.Puts(sb.ToString());
+                }
+            }
+
+            public static void load()
+            {
+                try
+                {
+                    instance = CooldownDataFile.ReadObject<CooldownData>();
+                }
+                catch (Exception E)
+                {
+                    StringBuilder sb = new StringBuilder($"loading {typeof(CooldownData).Name} failed. Make sure that all classes you're saving have a default constructor!\n");
                     sb.Append(E.Message);
                     PluginInstance.Puts(sb.ToString());
                 }
@@ -547,8 +645,10 @@ namespace Oxide.Plugins
 }﻿namespace Oxide.Plugins
 {
     using Facepunch.Extend;
+    using Steamworks.Data;
     using System;
     using System.Collections.Generic;
+    using System.Text;
     using UnityEngine;
     using static Oxide.Plugins.GUICreator;
 
@@ -573,22 +673,208 @@ namespace Oxide.Plugins
 
         GuiColor darkRed = new GuiColor(65, 33, 32, 0.8f);
         GuiColor lightRed = new GuiColor(162, 51, 46, 0.8f);
+
+        const string errorSound = "assets/prefabs/locks/keypad/effects/lock.code.denied.prefab";
+        const string successSound = "assets/prefabs/locks/keypad/effects/lock.code.updated.prefab";
+
         #endregion
 
         #region bounty creator
 
+        public class BountyBP
+        {
+            public BasePlayer target = null;
+            public int reward = 0;
+            public string reason = "";
+
+            public void init(BasePlayer placer)
+            {
+                new Bounty(placer, target, reward, reason);
+            }
+        }
+
         public void sendCreator(BasePlayer player)
         {
+#if DEBUG
+            player.ChatMessage($"sendCreator");
+#endif
+            BountyBP bp = new BountyBP();
+            GuiContainer c = new GuiContainer(this, "bountyCreator");
 
+            //template
+            Rectangle templatePos = new Rectangle(623, 26, 673, 854, resX, resY, true);
+            c.addImage("template", templatePos, "bounty_template", GuiContainer.Layer.hud, FadeIn: FadeIn, FadeOut: FadeOut);
+
+            //targetName
+            Rectangle targetNamePos = new Rectangle(680, 250, 100, 53, resX, resY, true);
+            Rectangle targetNamePosInput = new Rectangle(780, 250, 460, 53, resX, resY, true);
+            c.addText("targetNameHeader", targetNamePos, GuiContainer.Layer.hud, new GuiText("Target:", 20), FadeIn, FadeOut);
+            Action<BasePlayer, string[]> targetNameCB = (p, a) => 
+            {
+                if (a.Length < 1) return;
+                BasePlayer target = findPlayer(a[0], player);
+                if (target == null)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.missingTarget, bp);
+                    return;
+                }
+                bp.target = target;
+                GuiTracker.getGuiTracker(player).destroyGui(this, c, "targetName");
+                int fontsize = guiCreator.getFontsizeByFramesize(target.displayName.Length, targetNamePosInput);
+                GuiText targetNameText = new GuiText(target.displayName, fontsize);
+                GuiContainer c2 = new GuiContainer(this, "tfound", "bountyCreator");
+                c2.addText("targetName", targetNamePosInput, GuiContainer.Layer.hud, targetNameText, FadeIn, FadeOut);
+                c2.display(player);
+                Effect.server.Run(successSound, player.transform.position);
+
+                //image
+                if (config.showSteamImage)
+                {
+                    GetSteamUserData(target.userID, (ps) =>
+                    {
+                        guiCreator.registerImage(this, target.userID.ToString(), ps.avatarfull, () =>
+                        {
+                            Rectangle imagePos = new Rectangle(828, 315, 264, 264, resX, resY, true);
+                            GuiContainer c3 = new GuiContainer(this, "image", "bountyCreator");
+                            c3.addImage("image", imagePos, target.userID.ToString(), GuiContainer.Layer.hud, FadeIn: FadeIn, FadeOut: FadeOut);
+                            c3.display(player);
+                            player.ChatMessage("sent image");
+                        });
+                    });
+                }
+                
+            };
+            c.addInput("targetName", targetNamePosInput, targetNameCB, GuiContainer.Layer.hud, panelColor: new GuiColor("white"), text: new GuiText("", 20, new GuiColor("black")), FadeOut: FadeOut, FadeIn: FadeIn);
+
+            //reward
+            ItemDefinition itemDefinition = ItemManager.FindItemDefinition(config.currency);
+            Rectangle rewardPosInput = new Rectangle(828, 579, 132, 53, resX, resY, true);
+            Rectangle rewardPosCurrency = new Rectangle(970, 579, 122, 53, resX, resY, true);
+            Action<BasePlayer, string[]> rewardCB = (p, a) => 
+            {
+                if (a.Length < 1) return;
+                int reward = 0;
+                if (!int.TryParse(a[0], out reward))
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.badReward, bp);
+                    return;
+                }
+                if (reward < config.minReward)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.badReward, bp);
+                    return;
+                }
+                if(player.inventory.GetAmount(itemDefinition.itemid) < reward)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.cantAfford, bp);
+                    return;
+                }
+                bp.reward = reward;
+                GuiTracker.getGuiTracker(player).destroyGui(this, c, "reward");
+                GuiContainer c2 = new GuiContainer(this, "rewardok", "bountyCreator");
+                c2.addText("reward", rewardPosInput, GuiContainer.Layer.hud, new GuiText(reward.ToString(), 24, align: TextAnchor.MiddleRight), FadeIn, FadeOut);
+                c2.display(player);
+                Effect.server.Run(successSound, player.transform.position);
+            };
+            c.addInput("reward", rewardPosInput, rewardCB, GuiContainer.Layer.hud, panelColor: new GuiColor("white"), text: new GuiText("", 22, new GuiColor("black")), FadeOut: FadeOut, FadeIn: FadeIn);
+            c.addText("rewardCurrency", rewardPosCurrency, GuiContainer.Layer.hud, new GuiText(itemDefinition.displayName.english, 24, new GuiColor("black"), TextAnchor.MiddleLeft), FadeIn, FadeOut);
+
+            //reason
+            Rectangle reasonPos = new Rectangle(680, 681, 100, 53, resX, resY, true);
+            Rectangle reasonPosInput = new Rectangle(780, 681, 460, 53, resX, resY, true);
+            c.addText("reasonHeader", reasonPos, GuiContainer.Layer.hud, new GuiText("Reason:", 20), FadeIn, FadeOut);
+            Action<BasePlayer, string[]> reasonCB = (p, a) => 
+            {
+                if (a.Length < 1) return;
+                StringBuilder sb = new StringBuilder();
+                foreach(string s in a)
+                {
+                    sb.Append($"{s} ");
+                }
+                bp.reason = sb.ToString().Trim();
+            };
+            c.addInput("reason", reasonPosInput, reasonCB, GuiContainer.Layer.hud, panelColor: new GuiColor("white"), text: new GuiText("", 14, new GuiColor("black")), FadeOut: FadeOut, FadeIn: FadeIn);
+
+            //placerName
+            Rectangle placerNamePos = new Rectangle(680, 771, 560, 36, resX, resY, true);
+            GuiText placerNameText = new GuiText(player.displayName, guiCreator.getFontsizeByFramesize(player.displayName.Length, placerNamePos));
+            c.addText("placerName", placerNamePos, GuiContainer.Layer.hud, placerNameText, FadeIn, FadeOut);
+
+            //exitButton
+            Rectangle closeButtonPos = new Rectangle(1296, 52, 60, 60, resX, resY, true);
+            c.addButton("close", closeButtonPos, GuiContainer.Layer.hud, darkRed, FadeIn, FadeOut, new GuiText("X", 24, lightRed), blur: GuiContainer.Blur.medium);
+
+            c.display(player);
+
+            //button
+            creatorButton(player, bp: bp);
+        }
+
+        public enum createErrorType { none, missingTarget, badReward, cantAfford, missingReason };
+        public void creatorButton(BasePlayer player, createErrorType error = createErrorType.none, BountyBP bp = null)
+        {
+            GuiContainer c = new GuiContainer(this, "createButton", "bountyCreator");
+            Rectangle ButtonPos = new Rectangle(710, 856, 500, 100, resX, resY, true);
+
+            List<GuiText> textOptions = new List<GuiText>
+            {
+                new GuiText("Create Bounty", guiCreator.getFontsizeByFramesize(13, ButtonPos), lightGreen),
+                new GuiText("Target not found!", guiCreator.getFontsizeByFramesize(17, ButtonPos), lightRed),
+                new GuiText("Invalid reward!", guiCreator.getFontsizeByFramesize(15, ButtonPos), lightRed),
+                new GuiText("Can't afford reward!", guiCreator.getFontsizeByFramesize(20, ButtonPos), lightRed),
+                new GuiText("Reason can't be empty!", guiCreator.getFontsizeByFramesize(22, ButtonPos), lightRed)
+            };
+
+            Action<BasePlayer, string[]> cb = (p, a) =>
+            {
+                if (bp.target == null)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.missingTarget, bp);
+                }
+                else if(bp.reward == 0)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.badReward, bp);
+                }
+                else if (config.requireReason && string.IsNullOrEmpty(bp.reason))
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    creatorButton(player, createErrorType.missingReason, bp);
+                }
+                else
+                {
+                    Effect.server.Run(successSound, player.transform.position);
+                    bp.init(player);
+                    GuiTracker.getGuiTracker(player).destroyGui(this, "bountyCreator");
+                }
+            };
+
+            c.addPlainButton("button", ButtonPos, GuiContainer.Layer.hud, (error == createErrorType.none) ? darkGreen : darkRed, FadeIn, FadeOut, textOptions[(int)error], cb, blur: GuiContainer.Blur.medium);
+            c.display(player);
+
+            if (error != createErrorType.none)
+            {
+                PluginInstance.timer.Once(2f, () =>
+                {
+                    creatorButton(player, bp: bp);
+                });
+            }
         }
 
         #endregion
 
+        #region bounty
         public void sendBounty(BasePlayer player, Bounty bounty)
         {
 #if DEBUG
             player.ChatMessage($"sendBounty: {bounty.placerName} -> {bounty.targetName}");
 #endif
+            closeBounty(player);
             GuiContainer c = new GuiContainer(this, "bounty");
 
             //template
@@ -600,7 +886,14 @@ namespace Oxide.Plugins
             int fontsize = guiCreator.getFontsizeByFramesize(bounty.targetName.Length, targetNamePos);
             GuiText targetNameText = new GuiText(bounty.targetName, fontsize);
             c.addText("targetName", targetNamePos, GuiContainer.Layer.hud, targetNameText, FadeIn, FadeOut);
-           
+
+            //image
+            if(config.showSteamImage)
+            {
+                Rectangle imagePos = new Rectangle(828, 315, 264, 264, resX, resY, true);
+                c.addImage("image", imagePos, bounty.targetID.ToString(), GuiContainer.Layer.hud, FadeIn: FadeIn, FadeOut: FadeOut);
+            }
+
             //reward
             Rectangle rewardPos = new Rectangle(680, 579, 560, 53, resX, resY, true);
             string reward = $"{bounty.rewardAmount} {bounty.reward.info.displayName.english}";
@@ -618,12 +911,13 @@ namespace Oxide.Plugins
             c.addText("placerName", placerNamePos, GuiContainer.Layer.hud, placerNameText, FadeIn, FadeOut);
 
             //button
-            huntButton(player, bounty);
+            if (bounty.hunt != null) huntButton(player, bounty, huntErrorType.huntActive);
+            else huntButton(player, bounty);
 
             c.display(player);
         }
 
-        public enum huntErrorType {none ,hunterAlreadyHunting, hunterCooldown , targetAlreadyHunted, targetCooldown};
+        public enum huntErrorType {none ,hunterAlreadyHunting, targetAlreadyHunted, targetCooldown, huntActive};
         public void huntButton(BasePlayer player, Bounty bounty, huntErrorType error = huntErrorType.none)
         {
             GuiContainer c = new GuiContainer(this, "huntButton", "bounty");
@@ -632,52 +926,51 @@ namespace Oxide.Plugins
             List<GuiText> textOptions = new List<GuiText>
             {
                 new GuiText("Start Hunting", guiCreator.getFontsizeByFramesize(13, ButtonPos), lightGreen),
-                new GuiText("You are already hunting someone else", guiCreator.getFontsizeByFramesize(36, ButtonPos), lightRed),
-                new GuiText("You need to wait until you can hunt again", guiCreator.getFontsizeByFramesize(41, ButtonPos), lightRed),
+                new GuiText("You are already hunting", guiCreator.getFontsizeByFramesize(23, ButtonPos), lightRed),
                 new GuiText("Target is already being hunted", guiCreator.getFontsizeByFramesize(30, ButtonPos), lightRed),
-                new GuiText("Target can't be hunted yet", guiCreator.getFontsizeByFramesize(26, ButtonPos), lightRed)
+                new GuiText("Target can't be hunted yet", guiCreator.getFontsizeByFramesize(26, ButtonPos), lightRed),
+                new GuiText("Hunt Active", guiCreator.getFontsizeByFramesize(11, ButtonPos), lightRed),
             };
 
             Action<BasePlayer, string[]> cb = (p, a) =>
             {
-                if (bounty.hunt != null || HuntData.getHuntByHunter(p) != null)
+                if (error == huntErrorType.huntActive) return;
+                else if (bounty.hunt != null || HuntData.getHuntByHunter(p) != null)
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                    Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.hunterAlreadyHunting);
-                }
-                else if(false) //hunterCooldown
-                {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
-                    huntButton(player, bounty, huntErrorType.hunterCooldown);
                 }
                 else if(HuntData.getHuntByTarget(bounty.target) != null)
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                    Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetAlreadyHunted);
                 }
-                else if(false) //targetCooldown
+                else if(bounty.timeSinceCreation.TotalSeconds < config.creationCooldown || CooldownData.isOnCooldown(bounty.target))
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                    Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetCooldown);
                 }
                 else
                 {
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.updated.prefab", player.transform.position);
+                    Effect.server.Run(successSound, player.transform.position);
                     bounty.startHunt(p);
+                    huntButton(player, bounty, huntErrorType.huntActive);
                 }
             };
 
-            Action<BasePlayer, string[]> errorCB = (p, a) =>
+            c.addPlainButton("button", ButtonPos, GuiContainer.Layer.hud, (error == huntErrorType.none)?darkGreen:darkRed, FadeIn, FadeOut, textOptions[(int)error], cb, blur: GuiContainer.Blur.medium);
+            c.display(player);
+
+            if (error != huntErrorType.none && error != huntErrorType.huntActive)
             {
                 PluginInstance.timer.Once(2f, () =>
                 {
                     huntButton(player, bounty);
                 });
-            };
-
-            c.addPlainButton("button", ButtonPos, GuiContainer.Layer.hud, (error == huntErrorType.none)?darkGreen:darkRed, FadeIn, FadeOut, textOptions[(int)error], cb);
-            c.display(player);
+            }
         }
+
+        #endregion
 
         public void closeBounty(BasePlayer player)
         {
@@ -768,7 +1061,8 @@ namespace Oxide.Plugins
                 hunterID = hunter.userID;
                 hunterName = hunter.displayName;
                 huntTimer = PluginInstance.timer.Once((float)config.huntDuration, () => end());
-                ticker = PluginInstance.timer.Every(1, () => tick());
+                ticker = PluginInstance.timer.Every(config.indicatorRefresh, () => tick());
+                HuntData.addHunt(this);
             }
 
             public void tick()
@@ -799,7 +1093,9 @@ namespace Oxide.Plugins
 
                 huntTimer.Destroy();
                 ticker.Destroy();
+                bounty.hunt = null;
                 HuntData.removeHunt(this);
+                CooldownData.addCooldown(target);
             }
         }
     }
@@ -822,7 +1118,7 @@ namespace Oxide.Plugins
             {"usageAdd", "/bounty add (target name) (reward amount) \"(reason)\""},
             {"minReward", "The reward has to be at least {0}!" },
             {"notEnough", "You don't have enough {0}!" },
-            {"bountyText", "WANTED! DEAD OR ALIVE!\n{0}\n{1}\nREWARD: {2}\nlast seen in {3}, wearing {4}, {5}" },
+            {"bountyText", "WANTED! DEAD OR ALIVE!\n{0}\n{1}\nREWARD: {2}" },
             {"targetDeadBroadcast", "<size=30>{0} claims the {1} bounty on {2}'s head!</size>" },
             {"apiKey", "Please enter your steam API key in the config file. Get yours at https://steamcommunity.com/dev/apikey" }
         };
@@ -937,17 +1233,6 @@ namespace Oxide.Plugins
         private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
         {
             if (player == null) return;
-            if (oldItem != null)
-            {
-                if (oldItem?.info?.shortname == "note" && oldItem.HasFlag(global::Item.Flag.OnFire))
-                {
-                    Bounty bounty = BountyData.GetBounty(oldItem.uid);
-                    if (bounty != null)
-                    {
-                        closeBounty(player);
-                    }
-                }
-            }
             if (newItem != null)
             {
                 if (newItem?.info?.shortname == "note" && newItem.HasFlag(global::Item.Flag.OnFire))
@@ -956,9 +1241,11 @@ namespace Oxide.Plugins
                     if (bounty != null)
                     {
                         sendBounty(player, bounty);
+                        return;
                     }
                 }
             }
+            closeBounty(player);
         }
     }
 }﻿namespace Oxide.Plugins
@@ -1022,7 +1309,7 @@ namespace Oxide.Plugins
             public string avatarfull;
         }
 
-        public void GetPlayerSummary(ulong steamID, Action<PlayerSummary> callback)
+        public void GetSteamUserData(ulong steamID, Action<PlayerSummary> callback)
         {
             if(string.IsNullOrEmpty(config.steamAPIKey))
             {
