@@ -2,7 +2,7 @@
 {
     using UnityEngine;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         partial void initData();
 
@@ -107,7 +107,7 @@
             return null;
         }
 
-        private void OnActiveItemChanged(BasePlayer player, Item newItem, Item oldItem)
+        private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
         {
             if (player == null) return;
             if (newItem != null)
@@ -127,6 +127,7 @@
 
         object OnPlayerDeath(BasePlayer victim, HitInfo info)
         {
+            if (victim == null || info == null) return null;
             BasePlayer killer = info?.InitiatorPlayer;
             if (killer == null) return null;
 
@@ -134,17 +135,39 @@
             PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
 #endif
 
-            Hunt hunt = null;   
+            OnPlayerKilled(victim, killer);
+            return null;
+        }
+
+        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity == null || info == null) return;
+            if (!(entity is BasePlayer)) return;
+            BasePlayer victim = entity as BasePlayer;
+            BasePlayer killer = info?.InitiatorPlayer;
+            if (killer == null) return;
+
+#if DEBUG
+            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
+#endif
+
+            OnPlayerKilled(victim, killer);
+            return;
+        }
+
+        void OnPlayerKilled(BasePlayer victim, BasePlayer killer)
+        {
+            Hunt hunt = null;
             hunt = HuntData.getHuntByTarget(victim);
             if (hunt == null) hunt = HuntData.getHuntByHunter(victim);
-            if (hunt == null) return null;
+            if (hunt == null) return;
             if (hunt.hunter == killer || hunt.target == killer)
             {
                 hunt.end(killer);
-                return null;
-            }   
+                return;
+            }
 
-            return null;
+            return;
         }
 
         private object OnItemAction(Item item, string action)
@@ -178,6 +201,24 @@
             }
 
             return null;
+        }
+
+        void OnPlayerSleepEnded(BasePlayer player)
+        {
+            if (player == null) return;
+            Hunt hunt = HuntData.getHuntByTarget(player);
+            if (hunt == null) hunt = HuntData.getHuntByHunter(player);
+            if (hunt == null) return;
+            hunt.initTicker();
+        }
+
+        void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            if (player == null) return;
+            Hunt hunt = HuntData.getHuntByHunter(player);
+            if (hunt == null) return;
+            hunt.end();
+            CooldownData.removeCooldown(hunt.target);
         }
     }
 }

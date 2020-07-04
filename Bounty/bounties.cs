@@ -2,6 +2,10 @@
 
 //#define DEBUG
 
+//TODO:
+//sleeperguard integration
+//sleeper kill doesnt work yet
+
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
@@ -13,12 +17,12 @@ namespace Oxide.Plugins
 {
     [Info("bounties", "OHM & Bunsen", "2.0.0")]
     [Description("RP Bounty Hunting")]
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
-        private static Plugins.bounties PluginInstance;
+        private static Plugins.Bounties PluginInstance;
         const string logFileName = "bounties";
 
-        public bounties()
+        public Bounties()
         {
             PluginInstance = this;
         }
@@ -27,6 +31,7 @@ namespace Oxide.Plugins
 
         public string lastSeen(BasePlayer player)
         {
+            if (player == null) return null;
             StringBuilder sb = new StringBuilder("last seen ");
             string grid = getGrid(player.transform.position);
             if (!string.IsNullOrEmpty(grid)) sb.Append($"in {grid} ");

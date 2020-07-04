@@ -10,7 +10,7 @@
     using UnityEngine;
     using static Oxide.Plugins.GUICreator;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         partial void initGUI()
         {
@@ -273,14 +273,19 @@
             GuiText placerNameText = new GuiText(bounty.placerName, guiCreator.getFontsizeByFramesize(bounty.placerName.Length, placerNamePos));
             c.addText("placerName", placerNamePos, GuiContainer.Layer.hud, placerNameText, FadeIn, FadeOut);
 
+            //exitButton
+            Rectangle closeButtonPos = new Rectangle(1296, 52, 60, 60, resX, resY, true);
+            c.addButton("close", closeButtonPos, GuiContainer.Layer.hud, darkRed, FadeIn, FadeOut, new GuiText("X", 24, lightRed), blur: GuiContainer.Blur.medium);
+
+            c.display(player);
+
             //button
             if (bounty.hunt != null) huntButton(player, bounty, huntErrorType.huntActive);
             else huntButton(player, bounty);
 
-            c.display(player);
         }
 
-        public enum huntErrorType {none ,hunterAlreadyHunting, targetAlreadyHunted, targetCooldown, huntActive, selfHunt};
+        public enum huntErrorType {none ,hunterAlreadyHunting, targetAlreadyHunted, targetCooldown, huntActive, selfHunt, offline, tooClose};
         public void huntButton(BasePlayer player, Bounty bounty, huntErrorType error = huntErrorType.none)
         {
             GuiContainer c = new GuiContainer(this, "huntButton", "bountyPreview");
@@ -293,7 +298,9 @@
                 new GuiText("Target is already being hunted", guiCreator.getFontsizeByFramesize(30, ButtonPos), lightRed),
                 new GuiText("Target can't be hunted yet", guiCreator.getFontsizeByFramesize(26, ButtonPos), lightRed),
                 new GuiText("Hunt Active", guiCreator.getFontsizeByFramesize(11, ButtonPos), lightRed),
-                new GuiText("You can't hunt yourself!",guiCreator.getFontsizeByFramesize(24, ButtonPos), lightRed)
+                new GuiText("You can't hunt yourself!",guiCreator.getFontsizeByFramesize(24, ButtonPos), lightRed),
+                new GuiText("Target is offline",guiCreator.getFontsizeByFramesize(17, ButtonPos), lightRed),
+                new GuiText("Too close to the target!",guiCreator.getFontsizeByFramesize(24, ButtonPos), lightRed),
             };
 
             Action<BasePlayer, string[]> cb = (p, a) =>
@@ -311,7 +318,7 @@
                     Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetAlreadyHunted);
                 }
-                else if(bounty.timeSinceCreation.TotalSeconds < config.creationCooldown || CooldownData.isOnCooldown(bounty.target, out targetCooldown))
+                else if((bounty.timeSinceCreation.TotalSeconds < config.creationCooldown || CooldownData.isOnCooldown(bounty.target, out targetCooldown))&&!hasPermission(player, permissions.admin))
                 {
                     Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.targetCooldown);
@@ -319,10 +326,20 @@
                     if (targetCooldown > creationCooldown) select = targetCooldown;
                     player.ChatMessage($"Cooldown: {select.ToString(@"hh\:mm\:ss")}");
                 }
-                else if(bounty.target == player)
+                else if(bounty.target == player && !hasPermission(player, permissions.admin))
                 {
                     Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.selfHunt);
+                }
+                else if(bounty.target.IsSleeping())
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    huntButton(player, bounty, huntErrorType.offline);
+                }
+                else if(Vector3.Distance(player.transform.position, bounty.target.transform.position) < config.safeDistance && !hasPermission(player, permissions.admin))
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    huntButton(player, bounty, huntErrorType.tooClose);
                 }
                 else
                 {
@@ -362,6 +379,8 @@
 #if DEBUG
             player.ChatMessage($"sendHunterIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
 #endif
+            if (player == null) return;
+            if (player.IsSleeping()) return;
             GuiContainer c = new GuiContainer(this, "hunterIndicator");
 
             //Background
@@ -370,14 +389,14 @@
 
             //Name
             Rectangle namePos = new Rectangle(50, 100, 350, 35, resX, resY, true);
-            string nameTextString = $"You are hunting {hunt.target.displayName}";
+            string nameTextString = $"You are hunting {hunt.bounty.targetName}";
             int fontsize = guiCreator.getFontsizeByFramesize(nameTextString.Length, namePos);
             GuiText nameText = new GuiText(nameTextString, fontsize, opaqueWhite);
             c.addText("name", namePos, GuiContainer.Layer.hud, nameText);
 
             //Last Seen
             Rectangle lastSeenPos = new Rectangle(50, 135, 350, 80, resX, resY, true);
-            string lastSeenString = lastSeen(hunt.target);
+            string lastSeenString = hunt.lastSeen();
             GuiText lastSeenText = new GuiText(lastSeenString, 10, opaqueWhite);
             c.addText("lastSeen", lastSeenPos, GuiContainer.Layer.hud, lastSeenText);
 
@@ -394,18 +413,21 @@
 #if DEBUG
             player.ChatMessage($"sendTargetIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
 #endif
+            if (player == null) return;
+            if (player.IsSleeping()) return;
             GuiContainer c = new GuiContainer(this, "targetIndicator");
 
             //Background
             Rectangle bgPos = new Rectangle(50, 250, 350, 100, resX, resY, true);
-            float distance = Vector3.Distance(hunt.hunter.transform.position, hunt.target.transform.position);
-            GuiColor bgColor = gradientRedYellowGreen(Mathf.Clamp((distance / config.gradientBase), 0, 1));
+            float distance = config.safeDistance;
+            if(hunt.hunter?.transform != null && hunt.target?.transform != null) distance = Vector3.Distance(hunt.hunter.transform.position, hunt.target.transform.position);
+            GuiColor bgColor = gradientRedYellowGreen(Mathf.Clamp((distance / config.safeDistance), 0, 1));
             bgColor.setAlpha(0.5f);
             c.addPlainPanel("Background", bgPos, GuiContainer.Layer.hud, bgColor, 0, 0, GuiContainer.Blur.medium);
 
             //TopLine
             Rectangle topLinePos = new Rectangle(50, 250, 350, 50, resX, resY, true);
-            string TopLineString = $"You are being hunted{(config.showHunter?$" by {hunt.hunter.displayName}":"")}!";
+            string TopLineString = $"You are being hunted{(config.showHunter?$" by {hunt.hunterName}":"")}!";
             int topLineFontsize = guiCreator.getFontsizeByFramesize(TopLineString.Length, topLinePos);
             GuiText topLineText = new GuiText(TopLineString, topLineFontsize, opaqueWhite);
             c.addText("topline", topLinePos, GuiContainer.Layer.hud, topLineText);
@@ -447,7 +469,7 @@
         public void huntSuccessfullMsg(Hunt hunt)
         {
             guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.target.displayName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
-            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunter.displayName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.target.displayName}'s head!</color>\nRIP {hunt.target.displayName}!");
+            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunter.displayName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.target.displayName}'s head!</color>\nReason: {hunt.bounty.reason}");
 
             LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt successful: {hunt.hunter.displayName} -> {hunt.target.displayName} ", this);
         }

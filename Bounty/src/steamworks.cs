@@ -4,7 +4,7 @@
     using Oxide.Core.Libraries;
     using System;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         public class WebResponse
         {

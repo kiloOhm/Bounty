@@ -3,7 +3,7 @@
     using Newtonsoft.Json;
     using System;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         [JsonObject(MemberSerialization.OptIn)]
         public class Hunt
@@ -19,6 +19,8 @@
 
             [JsonProperty(PropertyName = "Hunter name")]
             public string hunterName;
+
+            private string lastSeenString;
 
             public BasePlayer hunter => BasePlayer.FindByID(hunterID);
 
@@ -40,13 +42,6 @@
 
             public Hunt()
             {
-                TimeSpan remainingCache = remaining;
-                if (remainingCache <= TimeSpan.Zero) end();
-                else
-                {
-                    huntTimer = PluginInstance.timer.Once((float)remainingCache.TotalSeconds, () => end());
-                    ticker = PluginInstance.timer.Every(1, () => tick());
-                }
             }
 
             public Hunt(Bounty bounty, BasePlayer hunter)
@@ -56,12 +51,29 @@
                 this.bounty = bounty;
                 hunterID = hunter.userID;
                 hunterName = hunter.displayName;
-                huntTimer = PluginInstance.timer.Once((float)config.huntDuration, () => end());
-                ticker = PluginInstance.timer.Every(config.indicatorRefresh, () => tick());
+                initTicker();
                 PluginInstance.sendHunterIndicator(hunter, this);
                 PluginInstance.sendTargetIndicator(target, this);
                 HuntData.addHunt(this);
                 PluginInstance.LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt started: {hunter.displayName} -> {target.displayName}", PluginInstance);
+            }
+
+            public string lastSeen()
+            {
+                string newLastSeen = PluginInstance.lastSeen(target);
+                if (newLastSeen != null) lastSeenString = newLastSeen;
+                return lastSeenString;
+            }
+
+            public void initTicker()
+            {
+                TimeSpan remainingCache = remaining;
+                if (remainingCache <= TimeSpan.Zero) end();
+                else
+                {
+                    if(huntTimer == null) huntTimer = PluginInstance.timer.Once((float)remainingCache.TotalSeconds, () => end());
+                    if(ticker == null) ticker = PluginInstance.timer.Every(1, () => tick());
+                }
             }
 
             public void tick()

@@ -4,7 +4,7 @@
     using System;
     using UnityEngine;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         [JsonObject(MemberSerialization.OptIn)]
         public class Bounty
@@ -55,7 +55,7 @@
                 {
                     //ItemDefinition itemDef = ItemManager.FindItemDefinition(config.currency);
                     //return string.Format(PluginInstance.lang.GetMessage("bountyText", PluginInstance), targetName, reason ?? $"disrespecting {placerName}", $"{rewardAmount} {itemDef?.displayName?.english ?? "$"}", PluginInstance.getGrid(target.transform.position), PluginInstance.wearing(target), PluginInstance.armedWith(target));
-                    return "To start hunting, put this note in your hotbar and select it!";
+                    return $"Target: {targetName}\nReward: {rewardAmount} {reward.info.displayName.english}\nTo start hunting, put this note in your hotbar and select it!";
                 }
             }
 

@@ -2,7 +2,7 @@
 {
     using System;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         //permissions will be (lowercase class name).(perm)
         partial void initPermissions()

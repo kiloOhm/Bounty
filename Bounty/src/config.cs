@@ -2,7 +2,7 @@
 {
     using Newtonsoft.Json;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         private static ConfigData config;
 
@@ -29,8 +29,8 @@
             [JsonProperty(PropertyName = "Hunt indicator refresh interval")]
             public int indicatorRefresh;
 
-            [JsonProperty(PropertyName = "Base safe distance for target indicator background color gradient calculation")]
-            public int gradientBase;
+            [JsonProperty(PropertyName = "Minimum distance for starting a hunt")]
+            public int safeDistance;
 
             [JsonProperty(PropertyName = "Show hunter name to target")]
             public bool showHunter;
@@ -59,7 +59,7 @@
                 targetCooldown = 7200,
                 huntDuration = 7200,
                 indicatorRefresh = 5,
-                gradientBase = 800,
+                safeDistance = 500,
                 showHunter = true,
                 broadcastHunt = true,
                 showSteamImage = true,

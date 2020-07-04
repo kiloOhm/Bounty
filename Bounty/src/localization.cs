@@ -2,7 +2,7 @@
 {
     using System.Collections.Generic;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         partial void initLang()
         {

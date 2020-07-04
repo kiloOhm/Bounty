@@ -9,12 +9,13 @@
     using System.Text;
     using UnityEngine;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         partial void initData()
         {
             BountyData.init();
             HuntData.init();
+            HuntData.restartHunts();
             CooldownData.init();
         }
 
@@ -102,7 +103,7 @@
         private class HuntData
         {
             private static DynamicConfigFile huntDataFile;
-            private static HuntData instance;
+            public static HuntData instance;
             private static bool initialized = false;
 
             [JsonProperty(PropertyName = "Hunt list")]
@@ -110,6 +111,14 @@
 
             public HuntData()
             {
+            }
+
+            public static void restartHunts()
+            {
+                foreach(Hunt hunt in instance.hunts)
+                {
+                    hunt.initTicker();
+                }
             }
 
             public static Hunt getHuntByHunter(BasePlayer player)
@@ -196,6 +205,13 @@
             {
                 if (instance.cooldowns.ContainsKey(player.userID)) return;
                 instance.cooldowns.Add(player.userID, DateTime.Now);
+                save();
+            }
+
+            public static void removeCooldown(BasePlayer player)
+            {
+                if (!instance.cooldowns.ContainsKey(player.userID)) return;
+                instance.cooldowns.Remove(player.userID);
                 save();
             }
 

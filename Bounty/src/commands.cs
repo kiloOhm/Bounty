@@ -3,13 +3,12 @@
     using System;
     using UnityEngine;
 
-    partial class bounties : RustPlugin
+    partial class Bounties : RustPlugin
     {
         partial void initCommands()
         {
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
-            //cmd.AddChatCommand("test", this, nameof(testCommand));
-            //cmd.AddConsoleCommand("bounties.test", this, nameof(consoleTestCommand));
+            cmd.AddChatCommand("hunt", this, nameof(huntCommand));
         }
 
         private void bountyCommand(BasePlayer player, string command, string[] args)
@@ -60,18 +59,36 @@
             }
         }
 
-        private void testCommand(BasePlayer player, string command, string[] args)
+        private void huntCommand(BasePlayer player, string command, string[] args)
         {
-
-        }
-
-        private void consoleTestCommand(ConsoleSystem.Arg arg)
-        {
-            GetSteamUserData(ulong.Parse(arg.Args[0]), (ps) =>
+            if (!hasPermission(player, permissions.admin))
             {
-                if (ps == null) return;
-                SendReply(arg, ps.personaname);
-            });
+                PrintToChat(player, lang.GetMessage("noPermission", this, player.UserIDString));
+                return;
+            }
+
+            if (args.Length == 0) return;
+            switch(args[0])
+            {
+                case "list":
+                    player.ChatMessage("Ongoing hunts:");
+                    foreach(Hunt h in HuntData.instance.hunts)
+                    {
+                        player.ChatMessage($"{h.hunterName} hunts {h.bounty.targetName}");
+                    }
+                    break;
+                case "end":
+                case "remove":
+                    if (args.Length < 2) return;
+                    Hunt hunt = HuntData.getHuntByHunter(player);
+                    if (hunt == null) hunt = HuntData.getHuntByTarget(player);
+                    if (hunt == null) return;
+                    hunt.end();
+                    player.ChatMessage("removed hunt");
+                    break;
+            }
         }
+
+
     }
 }
