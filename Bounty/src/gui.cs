@@ -308,6 +308,16 @@
                 TimeSpan targetCooldown = TimeSpan.Zero;
                 TimeSpan creationCooldown = new TimeSpan(0, 0, config.creationCooldown - (int)bounty.timeSinceCreation.TotalSeconds);
                 if (error == huntErrorType.huntActive) return;
+                else if (bounty.target == null)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    huntButton(player, bounty, huntErrorType.offline);
+                }
+                else if (bounty.target.IsSleeping())
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    huntButton(player, bounty, huntErrorType.offline);
+                }
                 else if (bounty.hunt != null || HuntData.getHuntByHunter(p) != null)
                 {
                     Effect.server.Run(errorSound, player.transform.position);
@@ -330,11 +340,6 @@
                 {
                     Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.selfHunt);
-                }
-                else if(bounty.target.IsSleeping())
-                {
-                    Effect.server.Run(errorSound, player.transform.position);
-                    huntButton(player, bounty, huntErrorType.offline);
                 }
                 else if(Vector3.Distance(player.transform.position, bounty.target.transform.position) < config.safeDistance && !hasPermission(player, permissions.admin))
                 {
@@ -454,32 +459,77 @@
 #if DEBUG
             player.ChatMessage($"closeIndicators: {player.displayName}");
 #endif
-            GuiTracker.getGuiTracker(player).destroyGui(this, "hunterIndicator");
-            GuiTracker.getGuiTracker(player).destroyGui(this, "targetIndicator");
+            try
+            {
+                GuiTracker.getGuiTracker(player).destroyGui(this, "hunterIndicator");
+            }
+            catch(Exception e)
+            {
+                Puts(e.Message);
+            }
+            try
+            {
+                GuiTracker.getGuiTracker(player).destroyGui(this, "targetIndicator");
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
         }
 
         public void huntExpiredMsg(Hunt hunt)
         {
-            guiCreator.customGameTip(hunt.hunter, "The hunt is over. Better luck next time!", 5);
-            guiCreator.customGameTip(hunt.target, "The hunt is over. You're safe... for now...", 5);
+            try
+            {
+                guiCreator.customGameTip(hunt.hunter, "The hunt is over. Better luck next time!", 5);
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
 
-            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt expired: {hunt.hunter.displayName} -> {hunt.target.displayName}", this);
+            try
+            {
+                guiCreator.customGameTip(hunt.target, "The hunt is over. You're safe... for now...", 5);
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt expired: {hunt.hunterName}[{hunt.hunterID}] hunting {hunt.bounty.targetName}[{hunt.bounty.targetID}], placed by {hunt.bounty.placerName}[{hunt.bounty.placerID}]", this);
         }
 
         public void huntSuccessfullMsg(Hunt hunt)
         {
-            guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.target.displayName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
-            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunter.displayName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.target.displayName}'s head!</color>\nReason: {hunt.bounty.reason}");
+            try
+            {
+                guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.hunterName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
 
-            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt successful: {hunt.hunter.displayName} -> {hunt.target.displayName} ", this);
+            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunterName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.bounty.targetName}'s head!</color>\nReason: {hunt.bounty.reason}");
+
+            LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt successful: {hunt.hunterName}[{hunt.hunterID}] hunting {hunt.bounty.targetName}[{hunt.bounty.targetID}], placed by {hunt.bounty.placerName}[{hunt.bounty.placerID}]", this);
         }
 
         public void huntFailedMsg(Hunt hunt)
         {
-            guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunter.displayName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
-            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.target.displayName} fends off his hunter {hunt.hunter.displayName} and claims {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english}</color>\nBetter luck next time {hunt.hunter.displayName}!");
+            try
+            {
+                guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunterName}!\n{hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
 
-            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")}Hunt failed: {hunt.hunter.displayName} -> {hunt.target.displayName}", this);
+            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.bounty.targetName} fends off his hunter {hunt.hunterName} and claims {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english}</color>\nBetter luck next time {hunt.hunterName}!");
+
+            LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")}Hunt failed: {hunt.hunterName}[{hunt.hunterID}] hunting {hunt.bounty.targetName}[{hunt.bounty.targetID}], placed by {hunt.bounty.placerName}[{hunt.bounty.placerID}]", this);
         }
 
         public GuiColor gradientRedYellowGreen(float level)

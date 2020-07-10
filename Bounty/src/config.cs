@@ -1,6 +1,8 @@
 ﻿namespace Oxide.Plugins
 {
+    using Facepunch.Extend;
     using Newtonsoft.Json;
+    using System.Collections.Generic;
 
     partial class Bounties : RustPlugin
     {
@@ -46,6 +48,9 @@
 
             [JsonProperty(PropertyName = "Allow skull crushing as confirmation")]
             public bool skullCrushing;
+
+            [JsonProperty(PropertyName = "Random Names for /mask command")]
+            public List<string> maskNames;
         }
 
         private ConfigData getDefaultConfig()
@@ -64,7 +69,110 @@
                 broadcastHunt = true,
                 showSteamImage = true,
                 requireReason = true,
-                skullCrushing = true
+                skullCrushing = true,
+                maskNames = new List<string>
+                {
+                    "Aischrolatry",
+                    "Anglomania",
+                    "AntrimIrpe",
+                    "Agnizetix982",
+                    "Scorbutic",
+                    "ForepSutler",
+                    "Ichthyic",
+                    "Gladiate",
+                    "Aubergine",
+                    "Zelotypia",
+                    "AltmousGadfly",
+                    "Piceous",
+                    "Synectics",
+                    "Policeocracy",
+                    "UgotmYeasty",
+                    "Multanimous",
+                    "Pulletwee12549",
+                    "Sativetang",
+                    "ForepSutler",
+                    "Grapheme",
+                    "Petulcous",
+                    "Pastance",
+                    "Ichorbmmlc77",
+                    "Osmometer",
+                    "Plurennial",
+                    "Affricate",
+                    "Anagogy",
+                    "Apperception",
+                    "Araphorostic",
+                    "AsufTropic",
+                    "Bailivate",
+                    "Bindlestiff",
+                    "Cataplasm",
+                    "Cylixlboj",
+                    "Demonomania",
+                    "Discept",
+                    "Enigmatology",
+                    "Entablature",
+                    "Episcopicide",
+                    "Estampie",
+                    "Favonian",
+                    "ForepSutler",
+                    "GrryDucape",
+                    "Hellenomania",
+                    "Horrent",
+                    "Horrent",
+                    "Hydroscopist",
+                    "Hylophagous",
+                    "Impudicity",
+                    "Inurbanity",
+                    "Invitatory",
+                    "Iteration",
+                    "Laevoduction",
+                    "Lardaceous",
+                    "Laudanum",
+                    "Magnetograph",
+                    "Matriotism",
+                    "Meninges",
+                    "Microanatomy",
+                    "Narrischkeit",
+                    "Necrophobia",
+                    "Necrophobia",
+                    "Necrophobia",
+                    "Neophobia",
+                    "Nephoscope",
+                    "Nephoscope",
+                    "Ophiology",
+                    "Ossiferous",
+                    "Padella",
+                    "Papillose",
+                    "Parabiosis",
+                    "Pasguard",
+                    "Pennyweight",
+                    "Piliferous",
+                    "Pillion",
+                    "Pleonectic",
+                    "Poliorcectic",
+                    "PugbrosMurine",
+                    "Pulicide",
+                    "Pullulate",
+                    "Quatrefoil",
+                    "Quillon",
+                    "Rescript",
+                    "Reticello",
+                    "RosyrotBulbul",
+                    "Socageralvy",
+                    "SoldarHoary",
+                    "Soughrox218",
+                    "Spiritualism",
+                    "Stadial",
+                    "Stirkfung123",
+                    "SwagtasCrinal",
+                    "Swivekth18",
+                    "Tegestology",
+                    "Torchier",
+                    "Tricolette",
+                    "Vadosemaryly",
+                    "Valeyval",
+                    "Vendace",
+                    "Yarmulke"
+                }
             };
         }
 

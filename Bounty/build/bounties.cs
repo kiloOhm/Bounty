@@ -4,6 +4,7 @@
 
 //TODO:
 //sleeperguard integration
+//sleeper kill doesnt work yet
 
 using Oxide.Core;
 using System;
@@ -19,7 +20,8 @@ namespace Oxide.Plugins
     partial class Bounties : RustPlugin
     {
         private static Plugins.Bounties PluginInstance;
-        const string logFileName = "bounties";
+        const string huntLogFileName = "hunts";
+        const string bountyLogFileName = "bounties";
 
         public Bounties()
         {
@@ -27,6 +29,12 @@ namespace Oxide.Plugins
         }
 
         #region helpers
+
+        public void rename(BasePlayer player, string name)
+        {
+            player.displayName = name;
+            player.IPlayer.Rename(name);
+        }
 
         public string lastSeen(BasePlayer player)
         {
@@ -69,21 +77,30 @@ namespace Oxide.Plugins
 
         public string armedWith(BasePlayer player)
         {
-            StringBuilder sb = new StringBuilder();
-            List<HeldEntity> heldEntities = new List<HeldEntity>();
-            foreach (Item item in player.inventory.containerBelt.itemList.Concat(player.inventory.containerMain.itemList))
+            if (player == null) return null;
+            try
             {
-                if (!item.info.isHoldable || item.GetHeldEntity() == null) continue;
-                heldEntities.Add(item.GetHeldEntity() as HeldEntity);
+                StringBuilder sb = new StringBuilder();
+                List<HeldEntity> heldEntities = new List<HeldEntity>();
+                foreach (Item item in player.inventory.containerBelt.itemList.Concat(player.inventory.containerMain.itemList))
+                {
+                    if (!item.info.isHoldable || item.GetHeldEntity() == null) continue;
+                    heldEntities.Add(item.GetHeldEntity() as HeldEntity);
+                }
+                if (heldEntities.Count == 0) sb.Append("unarmed");
+                else if (heldEntities.Count == 1) sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+                else
+                {
+                    heldEntities = (from x in heldEntities orderby x.hostileScore descending select x).ToList();
+                    sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+                }
+                return sb.ToString();
             }
-            if (heldEntities.Count == 0) sb.Append("unarmed");
-            else if (heldEntities.Count == 1) sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
-            else
+            catch(Exception e)
             {
-                heldEntities = (from x in heldEntities orderby x.hostileScore descending select x).ToList();
-                sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+                Puts(e.Message);
+                return null;
             }
-            return sb.ToString();
         }
 
         string getGrid(Vector3 pos)
@@ -193,7 +210,7 @@ namespace Oxide.Plugins
                 {
                     //ItemDefinition itemDef = ItemManager.FindItemDefinition(config.currency);
                     //return string.Format(PluginInstance.lang.GetMessage("bountyText", PluginInstance), targetName, reason ?? $"disrespecting {placerName}", $"{rewardAmount} {itemDef?.displayName?.english ?? "$"}", PluginInstance.getGrid(target.transform.position), PluginInstance.wearing(target), PluginInstance.armedWith(target));
-                    return $"Target: {targetName}\nReward: {rewardAmount} {reward.info.displayName.english}\nTo start hunting, put this note in your hotbar and select it!";
+                    return $"Target: {targetName}\nReward: {rewardAmount} {reward.info.displayName.english}\nReason: {reason}\nTo start hunting, put this note in your hotbar and select it!";
                 }
             }
 
@@ -219,6 +236,7 @@ namespace Oxide.Plugins
                 }
 
                 BountyData.AddBounty(this);
+                PluginInstance.LogToFile(bountyLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} {placerName}[{placerID}] placed a bounty of {rewardAmount} {config.currency} on {targetName}[{targetID}]'s head. Reason: {reason}", PluginInstance);
             }
 
             public Bounty() { }
@@ -247,6 +265,7 @@ namespace Oxide.Plugins
 {
     using System;
     using UnityEngine;
+    using UnityEngine.UI;
 
     partial class Bounties : RustPlugin
     {
@@ -254,6 +273,8 @@ namespace Oxide.Plugins
         {
             cmd.AddChatCommand("bounty", this, nameof(bountyCommand));
             cmd.AddChatCommand("hunt", this, nameof(huntCommand));
+            cmd.AddChatCommand("mask", this, nameof(maskCommand));
+            cmd.AddChatCommand("unmask", this, nameof(unmaskCommand));
         }
 
         private void bountyCommand(BasePlayer player, string command, string[] args)
@@ -304,6 +325,52 @@ namespace Oxide.Plugins
             }
         }
 
+        private void maskCommand(BasePlayer player, string command, string[] args)
+        {
+            if (!hasPermission(player, permissions.mask))
+            {
+                PrintToChat(player, lang.GetMessage("noPermission", this, player.UserIDString));
+                return;
+            }
+            Hunt hunt = HuntData.getHuntByHunter(player);
+            if (hunt == null)
+            {
+                player.ChatMessage("You're not hunting anyone!");
+                return;
+            }
+            if(config.maskNames.Count == 0)
+            {
+                player.ChatMessage("There aren't any masknames available.");
+                return;
+            }
+            System.Random rand = new System.Random();
+            string maskName = config.maskNames[rand.Next(0, config.maskNames.Count - 1)];
+            rename(player, maskName);
+            player.ChatMessage($"You've been renamed to <color=#00ff33><size=16>{maskName}</size></color>. Using global chat might give you away, so be careful...");
+        }
+
+        private void unmaskCommand(BasePlayer player, string command, string[] args)
+        {
+            if (!hasPermission(player, permissions.mask))
+            {
+                PrintToChat(player, lang.GetMessage("noPermission", this, player.UserIDString));
+                return;
+            }
+            Hunt hunt = HuntData.getHuntByHunter(player);
+            if (hunt == null)
+            {
+                player.ChatMessage("You're not hunting anyone!");
+                return;
+            }
+            if(player.displayName == hunt.hunterName)
+            {
+                player.ChatMessage("you're not masked!");
+                return;
+            }
+            rename(player, hunt.hunterName);
+            player.ChatMessage("You've been unmasked!");
+        }
+
         private void huntCommand(BasePlayer player, string command, string[] args)
         {
             if (!hasPermission(player, permissions.admin))
@@ -338,7 +405,9 @@ namespace Oxide.Plugins
     }
 }﻿namespace Oxide.Plugins
 {
+    using Facepunch.Extend;
     using Newtonsoft.Json;
+    using System.Collections.Generic;
 
     partial class Bounties : RustPlugin
     {
@@ -384,6 +453,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Allow skull crushing as confirmation")]
             public bool skullCrushing;
+
+            [JsonProperty(PropertyName = "Random Names for /mask command")]
+            public List<string> maskNames;
         }
 
         private ConfigData getDefaultConfig()
@@ -402,7 +474,110 @@ namespace Oxide.Plugins
                 broadcastHunt = true,
                 showSteamImage = true,
                 requireReason = true,
-                skullCrushing = true
+                skullCrushing = true,
+                maskNames = new List<string>
+                {
+                    "Aischrolatry",
+                    "Anglomania",
+                    "AntrimIrpe",
+                    "Agnizetix982",
+                    "Scorbutic",
+                    "ForepSutler",
+                    "Ichthyic",
+                    "Gladiate",
+                    "Aubergine",
+                    "Zelotypia",
+                    "AltmousGadfly",
+                    "Piceous",
+                    "Synectics",
+                    "Policeocracy",
+                    "UgotmYeasty",
+                    "Multanimous",
+                    "Pulletwee12549",
+                    "Sativetang",
+                    "ForepSutler",
+                    "Grapheme",
+                    "Petulcous",
+                    "Pastance",
+                    "Ichorbmmlc77",
+                    "Osmometer",
+                    "Plurennial",
+                    "Affricate",
+                    "Anagogy",
+                    "Apperception",
+                    "Araphorostic",
+                    "AsufTropic",
+                    "Bailivate",
+                    "Bindlestiff",
+                    "Cataplasm",
+                    "Cylixlboj",
+                    "Demonomania",
+                    "Discept",
+                    "Enigmatology",
+                    "Entablature",
+                    "Episcopicide",
+                    "Estampie",
+                    "Favonian",
+                    "ForepSutler",
+                    "GrryDucape",
+                    "Hellenomania",
+                    "Horrent",
+                    "Horrent",
+                    "Hydroscopist",
+                    "Hylophagous",
+                    "Impudicity",
+                    "Inurbanity",
+                    "Invitatory",
+                    "Iteration",
+                    "Laevoduction",
+                    "Lardaceous",
+                    "Laudanum",
+                    "Magnetograph",
+                    "Matriotism",
+                    "Meninges",
+                    "Microanatomy",
+                    "Narrischkeit",
+                    "Necrophobia",
+                    "Necrophobia",
+                    "Necrophobia",
+                    "Neophobia",
+                    "Nephoscope",
+                    "Nephoscope",
+                    "Ophiology",
+                    "Ossiferous",
+                    "Padella",
+                    "Papillose",
+                    "Parabiosis",
+                    "Pasguard",
+                    "Pennyweight",
+                    "Piliferous",
+                    "Pillion",
+                    "Pleonectic",
+                    "Poliorcectic",
+                    "PugbrosMurine",
+                    "Pulicide",
+                    "Pullulate",
+                    "Quatrefoil",
+                    "Quillon",
+                    "Rescript",
+                    "Reticello",
+                    "RosyrotBulbul",
+                    "Socageralvy",
+                    "SoldarHoary",
+                    "Soughrox218",
+                    "Spiritualism",
+                    "Stadial",
+                    "Stirkfung123",
+                    "SwagtasCrinal",
+                    "Swivekth18",
+                    "Tegestology",
+                    "Torchier",
+                    "Tricolette",
+                    "Vadosemaryly",
+                    "Valeyval",
+                    "Vendace",
+                    "Yarmulke"
+                }
             };
         }
 
@@ -1006,6 +1181,16 @@ namespace Oxide.Plugins
                 TimeSpan targetCooldown = TimeSpan.Zero;
                 TimeSpan creationCooldown = new TimeSpan(0, 0, config.creationCooldown - (int)bounty.timeSinceCreation.TotalSeconds);
                 if (error == huntErrorType.huntActive) return;
+                else if (bounty.target == null)
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    huntButton(player, bounty, huntErrorType.offline);
+                }
+                else if (bounty.target.IsSleeping())
+                {
+                    Effect.server.Run(errorSound, player.transform.position);
+                    huntButton(player, bounty, huntErrorType.offline);
+                }
                 else if (bounty.hunt != null || HuntData.getHuntByHunter(p) != null)
                 {
                     Effect.server.Run(errorSound, player.transform.position);
@@ -1028,11 +1213,6 @@ namespace Oxide.Plugins
                 {
                     Effect.server.Run(errorSound, player.transform.position);
                     huntButton(player, bounty, huntErrorType.selfHunt);
-                }
-                else if(bounty.target.IsSleeping())
-                {
-                    Effect.server.Run(errorSound, player.transform.position);
-                    huntButton(player, bounty, huntErrorType.offline);
                 }
                 else if(Vector3.Distance(player.transform.position, bounty.target.transform.position) < config.safeDistance && !hasPermission(player, permissions.admin))
                 {
@@ -1152,32 +1332,77 @@ namespace Oxide.Plugins
 #if DEBUG
             player.ChatMessage($"closeIndicators: {player.displayName}");
 #endif
-            GuiTracker.getGuiTracker(player).destroyGui(this, "hunterIndicator");
-            GuiTracker.getGuiTracker(player).destroyGui(this, "targetIndicator");
+            try
+            {
+                GuiTracker.getGuiTracker(player).destroyGui(this, "hunterIndicator");
+            }
+            catch(Exception e)
+            {
+                Puts(e.Message);
+            }
+            try
+            {
+                GuiTracker.getGuiTracker(player).destroyGui(this, "targetIndicator");
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
         }
 
         public void huntExpiredMsg(Hunt hunt)
         {
-            guiCreator.customGameTip(hunt.hunter, "The hunt is over. Better luck next time!", 5);
-            guiCreator.customGameTip(hunt.target, "The hunt is over. You're safe... for now...", 5);
+            try
+            {
+                guiCreator.customGameTip(hunt.hunter, "The hunt is over. Better luck next time!", 5);
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
 
-            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt expired: {hunt.hunter.displayName} -> {hunt.target.displayName}", this);
+            try
+            {
+                guiCreator.customGameTip(hunt.target, "The hunt is over. You're safe... for now...", 5);
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt expired: {hunt.hunterName}[{hunt.hunterID}] hunting {hunt.bounty.targetName}[{hunt.bounty.targetID}], placed by {hunt.bounty.placerName}[{hunt.bounty.placerID}]", this);
         }
 
         public void huntSuccessfullMsg(Hunt hunt)
         {
-            guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.target.displayName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
-            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunter.displayName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.target.displayName}'s head!</color>\nReason: {hunt.bounty.reason}");
+            try
+            {
+                guiCreator.prompt(hunt.hunter, $"You've successfully hunted down {hunt.hunterName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt successful!");
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
 
-            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt successful: {hunt.hunter.displayName} -> {hunt.target.displayName} ", this);
+            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.hunterName} claims the bounty of {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} on {hunt.bounty.targetName}'s head!</color>\nReason: {hunt.bounty.reason}");
+
+            LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt successful: {hunt.hunterName}[{hunt.hunterID}] hunting {hunt.bounty.targetName}[{hunt.bounty.targetID}], placed by {hunt.bounty.placerName}[{hunt.bounty.placerID}]", this);
         }
 
         public void huntFailedMsg(Hunt hunt)
         {
-            guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunter.displayName}!\n{hunt.bounty.reward.amount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
-            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.target.displayName} fends off his hunter {hunt.hunter.displayName} and claims {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english}</color>\nBetter luck next time {hunt.hunter.displayName}!");
+            try
+            {
+                guiCreator.prompt(hunt.target, $"You've successfully defended yourself from {hunt.hunterName}!\n{hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english} have been transferred to your inventory!", "Hunt averted!");
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
 
-            LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")}Hunt failed: {hunt.hunter.displayName} -> {hunt.target.displayName}", this);
+            if (config.broadcastHunt) PrintToChat($"<color=#00ff33>{hunt.bounty.targetName} fends off his hunter {hunt.hunterName} and claims {hunt.bounty.rewardAmount} {hunt.bounty.reward.info.displayName.english}</color>\nBetter luck next time {hunt.hunterName}!");
+
+            LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")}Hunt failed: {hunt.hunterName}[{hunt.hunterID}] hunting {hunt.bounty.targetName}[{hunt.bounty.targetID}], placed by {hunt.bounty.placerName}[{hunt.bounty.placerID}]", this);
         }
 
         public GuiColor gradientRedYellowGreen(float level)
@@ -1245,7 +1470,8 @@ namespace Oxide.Plugins
                 PluginInstance.sendHunterIndicator(hunter, this);
                 PluginInstance.sendTargetIndicator(target, this);
                 HuntData.addHunt(this);
-                PluginInstance.LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt started: {hunter.displayName} -> {target.displayName}", PluginInstance);
+                if(PluginInstance.hasPermission(hunter, permissions.mask)) hunter.ChatMessage("<color=#00ff33>Hunt started!</color> Remember that you can use /mask and /unmask to randomize your name for some extra stealth!");
+                PluginInstance.LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt started: {hunter.displayName}[{hunter.UserIDString}] hunting {target.displayName}[{target.UserIDString}], placed by {bounty.placerName}[{bounty.placerID}]", PluginInstance);
             }
 
             public string lastSeen()
@@ -1268,8 +1494,22 @@ namespace Oxide.Plugins
 
             public void tick()
             {
-                PluginInstance.sendHunterIndicator(hunter, this);
-                PluginInstance.sendTargetIndicator(target, this);
+                try
+                {
+                    PluginInstance.sendHunterIndicator(hunter, this);
+                }
+                catch( Exception e)
+                {
+                    PluginInstance.Puts(e.Message);
+                }
+                try
+                {
+                    PluginInstance.sendTargetIndicator(target, this);
+                }
+                catch (Exception e)
+                {
+                    PluginInstance.Puts(e.Message);
+                }
             }
 
             public void end(BasePlayer winner = null)
@@ -1277,6 +1517,10 @@ namespace Oxide.Plugins
 #if DEBUG
                 PluginInstance.PrintToChat($"ending hunt {hunterName} -> {bounty.targetName}, winner: {winner?.displayName ?? "null"}");
 #endif
+                huntTimer.Destroy();
+                ticker.Destroy();
+                PluginInstance.rename(hunter, hunterName);
+
                 if (winner == hunter)
                 {
                     //msg
@@ -1300,9 +1544,6 @@ namespace Oxide.Plugins
                     bounty.noteUid = bounty.giveNote(hunter);
                     BountyData.AddBounty(bounty);
                 }
-
-                huntTimer.Destroy();
-                ticker.Destroy();
                 bounty.hunt = null;
                 HuntData.removeHunt(this);
                 CooldownData.addCooldown(target);
@@ -1337,6 +1578,7 @@ namespace Oxide.Plugins
     }
 }﻿namespace Oxide.Plugins
 {
+    using System;
     using UnityEngine;
 
     partial class Bounties : RustPlugin
@@ -1353,11 +1595,18 @@ namespace Oxide.Plugins
 
         private void Loaded()
         {
-            initData();
-            initCommands();
-            initLang();
-            initPermissions();
-            initGUI();
+            try
+            {
+                initData();
+                initCommands();
+                initLang();
+                initPermissions();
+                initGUI();
+            }
+            catch(Exception e)
+            {
+                Puts(e.Message);
+            }
 
             if (!config.skullCrushing) Unsubscribe("OnItemAction");
         }
@@ -1444,7 +1693,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
+        void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
         {
             if (player == null) return;
             if (newItem != null)
@@ -1462,48 +1711,51 @@ namespace Oxide.Plugins
             closeBounty(player);
         }
 
-        object OnPlayerDeath(BasePlayer victim, HitInfo info)
+        void OnPlayerDeath(BasePlayer victim, HitInfo info)
         {
-            if (victim == null || info == null) return null;
-            BasePlayer killer = info?.InitiatorPlayer;
-            if (killer == null) return null;
+            if (victim == null || info == null)
+                return;
 
-#if DEBUG
-            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
-#endif
+            BasePlayer killer = info.InitiatorPlayer;
 
-            OnPlayerKilled(victim, killer);
-            return null;
-        }
-
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            if (entity == null || info == null) return;
-            if (!(entity is BasePlayer)) return;
-            BasePlayer victim = entity as BasePlayer;
-            BasePlayer killer = info?.InitiatorPlayer;
-            if (killer == null) return;
-
-#if DEBUG
-            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
-#endif
+            if (killer == null || killer.GetComponent<NPCPlayer>())
+                return;
 
             OnPlayerKilled(victim, killer);
             return;
         }
 
+        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity == null || info == null)
+                return;
+
+            BasePlayer victim = entity.ToPlayer();
+            BasePlayer killer = info.InitiatorPlayer;
+
+            if (victim == null || killer == null || killer.GetComponent<NPCPlayer>())
+                return;
+
+            OnPlayerKilled(victim, killer);
+        }
+
         void OnPlayerKilled(BasePlayer victim, BasePlayer killer)
         {
+#if DEBUG
+            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
+#endif
+
             Hunt hunt = null;
             hunt = HuntData.getHuntByTarget(victim);
-            if (hunt == null) hunt = HuntData.getHuntByHunter(victim);
-            if (hunt == null) return;
-            if (hunt.hunter == killer || hunt.target == killer)
+            if(hunt != null) //Hunter kills target
             {
-                hunt.end(killer);
-                return;
+                if (hunt.hunter == killer) hunt.end(killer);
             }
-
+            else hunt = HuntData.getHuntByHunter(victim);
+            if(hunt != null) //target kills hunter
+            {
+                if (hunt.target == killer) hunt.end(killer);
+            }
             return;
         }
 
@@ -1576,6 +1828,7 @@ namespace Oxide.Plugins
         private enum permissions
         {
             use,
+            mask,
             admin
         }
 

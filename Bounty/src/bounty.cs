@@ -55,7 +55,7 @@
                 {
                     //ItemDefinition itemDef = ItemManager.FindItemDefinition(config.currency);
                     //return string.Format(PluginInstance.lang.GetMessage("bountyText", PluginInstance), targetName, reason ?? $"disrespecting {placerName}", $"{rewardAmount} {itemDef?.displayName?.english ?? "$"}", PluginInstance.getGrid(target.transform.position), PluginInstance.wearing(target), PluginInstance.armedWith(target));
-                    return $"Target: {targetName}\nReward: {rewardAmount} {reward.info.displayName.english}\nTo start hunting, put this note in your hotbar and select it!";
+                    return $"Target: {targetName}\nReward: {rewardAmount} {reward.info.displayName.english}\nReason: {reason}\nTo start hunting, put this note in your hotbar and select it!";
                 }
             }
 
@@ -81,6 +81,7 @@
                 }
 
                 BountyData.AddBounty(this);
+                PluginInstance.LogToFile(bountyLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} {placerName}[{placerID}] placed a bounty of {rewardAmount} {config.currency} on {targetName}[{targetID}]'s head. Reason: {reason}", PluginInstance);
             }
 
             public Bounty() { }

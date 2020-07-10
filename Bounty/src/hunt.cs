@@ -55,7 +55,8 @@
                 PluginInstance.sendHunterIndicator(hunter, this);
                 PluginInstance.sendTargetIndicator(target, this);
                 HuntData.addHunt(this);
-                PluginInstance.LogToFile(logFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt started: {hunter.displayName} -> {target.displayName}", PluginInstance);
+                if(PluginInstance.hasPermission(hunter, permissions.mask)) hunter.ChatMessage("<color=#00ff33>Hunt started!</color> Remember that you can use /mask and /unmask to randomize your name for some extra stealth!");
+                PluginInstance.LogToFile(huntLogFileName, $"{DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")} Hunt started: {hunter.displayName}[{hunter.UserIDString}] hunting {target.displayName}[{target.UserIDString}], placed by {bounty.placerName}[{bounty.placerID}]", PluginInstance);
             }
 
             public string lastSeen()
@@ -78,8 +79,22 @@
 
             public void tick()
             {
-                PluginInstance.sendHunterIndicator(hunter, this);
-                PluginInstance.sendTargetIndicator(target, this);
+                try
+                {
+                    PluginInstance.sendHunterIndicator(hunter, this);
+                }
+                catch( Exception e)
+                {
+                    PluginInstance.Puts(e.Message);
+                }
+                try
+                {
+                    PluginInstance.sendTargetIndicator(target, this);
+                }
+                catch (Exception e)
+                {
+                    PluginInstance.Puts(e.Message);
+                }
             }
 
             public void end(BasePlayer winner = null)
@@ -87,6 +102,10 @@
 #if DEBUG
                 PluginInstance.PrintToChat($"ending hunt {hunterName} -> {bounty.targetName}, winner: {winner?.displayName ?? "null"}");
 #endif
+                huntTimer.Destroy();
+                ticker.Destroy();
+                PluginInstance.rename(hunter, hunterName);
+
                 if (winner == hunter)
                 {
                     //msg
@@ -110,9 +129,6 @@
                     bounty.noteUid = bounty.giveNote(hunter);
                     BountyData.AddBounty(bounty);
                 }
-
-                huntTimer.Destroy();
-                ticker.Destroy();
                 bounty.hunt = null;
                 HuntData.removeHunt(this);
                 CooldownData.addCooldown(target);

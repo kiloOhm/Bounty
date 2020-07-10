@@ -16,6 +16,7 @@
         private enum permissions
         {
             use,
+            mask,
             admin
         }
 

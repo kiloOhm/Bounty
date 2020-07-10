@@ -1,5 +1,6 @@
 ﻿namespace Oxide.Plugins
 {
+    using System;
     using UnityEngine;
 
     partial class Bounties : RustPlugin
@@ -16,11 +17,50 @@
 
         private void Loaded()
         {
-            initData();
-            initCommands();
-            initLang();
-            initPermissions();
-            initGUI();
+            try
+            {
+                initData();
+            }
+            catch(Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initCommands();
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initLang();
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initPermissions();
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initGUI();
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
 
             if (!config.skullCrushing) Unsubscribe("OnItemAction");
         }
@@ -107,7 +147,7 @@
             return null;
         }
 
-        private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
+        void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
         {
             if (player == null) return;
             if (newItem != null)
@@ -125,48 +165,51 @@
             closeBounty(player);
         }
 
-        object OnPlayerDeath(BasePlayer victim, HitInfo info)
+        void OnPlayerDeath(BasePlayer victim, HitInfo info)
         {
-            if (victim == null || info == null) return null;
-            BasePlayer killer = info?.InitiatorPlayer;
-            if (killer == null) return null;
+            if (victim == null || info == null)
+                return;
 
-#if DEBUG
-            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
-#endif
+            BasePlayer killer = info.InitiatorPlayer;
 
-            OnPlayerKilled(victim, killer);
-            return null;
-        }
-
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            if (entity == null || info == null) return;
-            if (!(entity is BasePlayer)) return;
-            BasePlayer victim = entity as BasePlayer;
-            BasePlayer killer = info?.InitiatorPlayer;
-            if (killer == null) return;
-
-#if DEBUG
-            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
-#endif
+            if (killer == null || killer.GetComponent<NPCPlayer>())
+                return;
 
             OnPlayerKilled(victim, killer);
             return;
         }
 
+        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity == null || info == null)
+                return;
+
+            BasePlayer victim = entity.ToPlayer();
+            BasePlayer killer = info.InitiatorPlayer;
+
+            if (victim == null || killer == null || killer.GetComponent<NPCPlayer>())
+                return;
+
+            OnPlayerKilled(victim, killer);
+        }
+
         void OnPlayerKilled(BasePlayer victim, BasePlayer killer)
         {
+#if DEBUG
+            PrintToChat($"{killer?.displayName ?? "null"} kills {victim?.displayName ?? "null"}");
+#endif
+
             Hunt hunt = null;
             hunt = HuntData.getHuntByTarget(victim);
-            if (hunt == null) hunt = HuntData.getHuntByHunter(victim);
-            if (hunt == null) return;
-            if (hunt.hunter == killer || hunt.target == killer)
+            if(hunt != null) //Hunter kills target
             {
-                hunt.end(killer);
-                return;
+                if (hunt.hunter == killer) hunt.end(killer);
             }
-
+            else hunt = HuntData.getHuntByHunter(victim);
+            if(hunt != null) //target kills hunter
+            {
+                if (hunt.target == killer) hunt.end(killer);
+            }
             return;
         }
 

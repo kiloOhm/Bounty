@@ -2,10 +2,6 @@
 
 //#define DEBUG
 
-//TODO:
-//sleeperguard integration
-//sleeper kill doesnt work yet
-
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
@@ -15,12 +11,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("bounties", "OHM & Bunsen", "2.0.0")]
+    [Info("bounties", "OHM & Bunsen", "2.0.3")]
     [Description("RP Bounty Hunting")]
     partial class Bounties : RustPlugin
     {
         private static Plugins.Bounties PluginInstance;
-        const string logFileName = "bounties";
+        const string huntLogFileName = "hunts";
+        const string bountyLogFileName = "bounties";
 
         public Bounties()
         {
@@ -28,6 +25,12 @@ namespace Oxide.Plugins
         }
 
         #region helpers
+
+        public void rename(BasePlayer player, string name)
+        {
+            player.displayName = name;
+            player.IPlayer.Rename(name);
+        }
 
         public string lastSeen(BasePlayer player)
         {
@@ -70,21 +73,30 @@ namespace Oxide.Plugins
 
         public string armedWith(BasePlayer player)
         {
-            StringBuilder sb = new StringBuilder();
-            List<HeldEntity> heldEntities = new List<HeldEntity>();
-            foreach (Item item in player.inventory.containerBelt.itemList.Concat(player.inventory.containerMain.itemList))
+            if (player == null) return null;
+            try
             {
-                if (!item.info.isHoldable || item.GetHeldEntity() == null) continue;
-                heldEntities.Add(item.GetHeldEntity() as HeldEntity);
+                StringBuilder sb = new StringBuilder();
+                List<HeldEntity> heldEntities = new List<HeldEntity>();
+                foreach (Item item in player.inventory.containerBelt.itemList.Concat(player.inventory.containerMain.itemList))
+                {
+                    if (!item.info.isHoldable || item.GetHeldEntity() == null) continue;
+                    heldEntities.Add(item.GetHeldEntity() as HeldEntity);
+                }
+                if (heldEntities.Count == 0) sb.Append("unarmed");
+                else if (heldEntities.Count == 1) sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+                else
+                {
+                    heldEntities = (from x in heldEntities orderby x.hostileScore descending select x).ToList();
+                    sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+                }
+                return sb.ToString();
             }
-            if (heldEntities.Count == 0) sb.Append("unarmed");
-            else if (heldEntities.Count == 1) sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
-            else
+            catch(Exception e)
             {
-                heldEntities = (from x in heldEntities orderby x.hostileScore descending select x).ToList();
-                sb.Append($"armed with {heldEntities[0].GetItem().info.displayName.english}");
+                Puts(e.Message);
+                return null;
             }
-            return sb.ToString();
         }
 
         string getGrid(Vector3 pos)
