@@ -2,10 +2,6 @@
 
 //#define DEBUG
 
-//TODO:
-//sleeperguard integration
-//sleeper kill doesnt work yet
-
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
@@ -15,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("bounties", "OHM & Bunsen", "2.0.0")]
+    [Info("bounties", "OHM & Bunsen", "2.0.3")]
     [Description("RP Bounty Hunting")]
     partial class Bounties : RustPlugin
     {
@@ -32,6 +28,7 @@ namespace Oxide.Plugins
 
         public void rename(BasePlayer player, string name)
         {
+            if (player == null) return;
             player.displayName = name;
             player.IPlayer.Rename(name);
         }
@@ -392,8 +389,9 @@ namespace Oxide.Plugins
                 case "end":
                 case "remove":
                     if (args.Length < 2) return;
-                    Hunt hunt = HuntData.getHuntByHunter(player);
-                    if (hunt == null) hunt = HuntData.getHuntByTarget(player);
+                    BasePlayer target = findPlayer(args[1], player);
+                    Hunt hunt = HuntData.getHuntByHunter(target);
+                    if (hunt == null) hunt = HuntData.getHuntByTarget(target);
                     if (hunt == null) return;
                     hunt.end();
                     player.ChatMessage("removed hunt");
@@ -807,6 +805,7 @@ namespace Oxide.Plugins
 
             public static void addCooldown(BasePlayer player)
             {
+                if (player == null) return;
                 if (instance.cooldowns.ContainsKey(player.userID)) return;
                 instance.cooldowns.Add(player.userID, DateTime.Now);
                 save();
@@ -1517,8 +1516,9 @@ namespace Oxide.Plugins
 #if DEBUG
                 PluginInstance.PrintToChat($"ending hunt {hunterName} -> {bounty.targetName}, winner: {winner?.displayName ?? "null"}");
 #endif
-                huntTimer.Destroy();
-                ticker.Destroy();
+                if(huntTimer != null) huntTimer.Destroy();
+                if(ticker != null) ticker.Destroy();
+
                 PluginInstance.rename(hunter, hunterName);
 
                 if (winner == hunter)
@@ -1544,11 +1544,11 @@ namespace Oxide.Plugins
                     bounty.noteUid = bounty.giveNote(hunter);
                     BountyData.AddBounty(bounty);
                 }
+                PluginInstance.closeIndicators(target);
+                PluginInstance.closeIndicators(hunter);
                 bounty.hunt = null;
                 HuntData.removeHunt(this);
                 CooldownData.addCooldown(target);
-                PluginInstance.closeIndicators(target);
-                PluginInstance.closeIndicators(hunter);
             }
         }
     }
@@ -1598,12 +1598,44 @@ namespace Oxide.Plugins
             try
             {
                 initData();
-                initCommands();
-                initLang();
-                initPermissions();
-                initGUI();
             }
             catch(Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initCommands();
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initLang();
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initPermissions();
+            }
+            catch (Exception e)
+            {
+                Puts(e.Message);
+            }
+
+            try
+            {
+                initGUI();
+            }
+            catch (Exception e)
             {
                 Puts(e.Message);
             }
@@ -1749,12 +1781,12 @@ namespace Oxide.Plugins
             hunt = HuntData.getHuntByTarget(victim);
             if(hunt != null) //Hunter kills target
             {
-                if (hunt.hunter == killer) hunt.end(killer);
+                if (hunt.hunter == killer && hunt.target == victim) hunt.end(hunt.hunter);
             }
             else hunt = HuntData.getHuntByHunter(victim);
             if(hunt != null) //target kills hunter
             {
-                if (hunt.target == killer) hunt.end(killer);
+                if (hunt.target == killer && hunt.hunter == victim) hunt.end(hunt.target);
             }
             return;
         }

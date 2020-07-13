@@ -102,8 +102,9 @@
 #if DEBUG
                 PluginInstance.PrintToChat($"ending hunt {hunterName} -> {bounty.targetName}, winner: {winner?.displayName ?? "null"}");
 #endif
-                huntTimer.Destroy();
-                ticker.Destroy();
+                if(huntTimer != null) huntTimer.Destroy();
+                if(ticker != null) ticker.Destroy();
+
                 PluginInstance.rename(hunter, hunterName);
 
                 if (winner == hunter)
@@ -129,11 +130,11 @@
                     bounty.noteUid = bounty.giveNote(hunter);
                     BountyData.AddBounty(bounty);
                 }
+                PluginInstance.closeIndicators(target);
+                PluginInstance.closeIndicators(hunter);
                 bounty.hunt = null;
                 HuntData.removeHunt(this);
                 CooldownData.addCooldown(target);
-                PluginInstance.closeIndicators(target);
-                PluginInstance.closeIndicators(hunter);
             }
         }
     }

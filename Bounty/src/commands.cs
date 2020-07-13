@@ -129,8 +129,9 @@
                 case "end":
                 case "remove":
                     if (args.Length < 2) return;
-                    Hunt hunt = HuntData.getHuntByHunter(player);
-                    if (hunt == null) hunt = HuntData.getHuntByTarget(player);
+                    BasePlayer target = findPlayer(args[1], player);
+                    Hunt hunt = HuntData.getHuntByHunter(target);
+                    if (hunt == null) hunt = HuntData.getHuntByTarget(target);
                     if (hunt == null) return;
                     hunt.end();
                     player.ChatMessage("removed hunt");

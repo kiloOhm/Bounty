@@ -203,12 +203,12 @@
             hunt = HuntData.getHuntByTarget(victim);
             if(hunt != null) //Hunter kills target
             {
-                if (hunt.hunter == killer) hunt.end(killer);
+                if (hunt.hunter == killer && hunt.target == victim) hunt.end(hunt.hunter);
             }
             else hunt = HuntData.getHuntByHunter(victim);
             if(hunt != null) //target kills hunter
             {
-                if (hunt.target == killer) hunt.end(killer);
+                if (hunt.target == killer && hunt.hunter == victim) hunt.end(hunt.target);
             }
             return;
         }

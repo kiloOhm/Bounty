@@ -203,6 +203,7 @@
 
             public static void addCooldown(BasePlayer player)
             {
+                if (player == null) return;
                 if (instance.cooldowns.ContainsKey(player.userID)) return;
                 instance.cooldowns.Add(player.userID, DateTime.Now);
                 save();
