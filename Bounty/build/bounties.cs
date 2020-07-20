@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("bounties", "OHM & Bunsen", "2.0.6")]
+    [Info("bounties", "OHM & Bunsen", "2.0.8")]
     [Description("RP Bounty Hunting")]
     partial class Bounties : RustPlugin
     {
@@ -1431,6 +1431,7 @@ namespace Oxide.Plugins
 }﻿namespace Oxide.Plugins
 {
     using Newtonsoft.Json;
+    using Oxide.Core;
     using System;
 
     partial class Bounties : RustPlugin
@@ -1539,6 +1540,7 @@ namespace Oxide.Plugins
 
                 if (winner == hunter)
                 {
+                    Interface.Oxide.CallHook("OnBountyCompleted", winner, target);
                     //msg
                     PluginInstance.huntSuccessfullMsg(this);
 

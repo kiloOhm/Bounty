@@ -1,6 +1,7 @@
 ﻿namespace Oxide.Plugins
 {
     using Newtonsoft.Json;
+    using Oxide.Core;
     using System;
 
     partial class Bounties : RustPlugin
@@ -109,6 +110,7 @@
 
                 if (winner == hunter)
                 {
+                    Interface.Oxide.CallHook("OnBountyCompleted", winner, target);
                     //msg
                     PluginInstance.huntSuccessfullMsg(this);
 
