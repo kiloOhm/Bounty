@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("bounties", "OHM & Bunsen", "2.0.6")]
+    [Info("bounties", "OHM & Bunsen", "2.0.7")]
     [Description("RP Bounty Hunting")]
     partial class Bounties : RustPlugin
     {

@@ -400,10 +400,13 @@
             c.addText("name", namePos, GuiContainer.Layer.hud, nameText);
 
             //Last Seen
-            Rectangle lastSeenPos = new Rectangle(50, 135, 350, 80, resX, resY, true);
-            string lastSeenString = hunt.lastSeen();
-            GuiText lastSeenText = new GuiText(lastSeenString, 10, opaqueWhite);
-            c.addText("lastSeen", lastSeenPos, GuiContainer.Layer.hud, lastSeenText);
+            if(config.showLastSeen)
+            {
+                Rectangle lastSeenPos = new Rectangle(50, 135, 350, 80, resX, resY, true);
+                string lastSeenString = hunt.lastSeen();
+                GuiText lastSeenText = new GuiText(lastSeenString, 10, opaqueWhite);
+                c.addText("lastSeen", lastSeenPos, GuiContainer.Layer.hud, lastSeenText);
+            }
 
             //Countdown
             Rectangle countdownPos = new Rectangle(50, 215, 350, 35, resX, resY, true);
@@ -415,6 +418,7 @@
 
         public void sendTargetIndicator(BasePlayer player, Hunt hunt)
         {
+            if (!config.showTargetIndicator) return;
 #if DEBUG
             player.ChatMessage($"sendTargetIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
 #endif
@@ -426,7 +430,7 @@
             Rectangle bgPos = new Rectangle(50, 250, 350, 100, resX, resY, true);
             float distance = config.safeDistance;
             if(hunt.hunter?.transform != null && hunt.target?.transform != null) distance = Vector3.Distance(hunt.hunter.transform.position, hunt.target.transform.position);
-            GuiColor bgColor = gradientRedYellowGreen(Mathf.Clamp((distance / config.safeDistance), 0, 1));
+            GuiColor bgColor = config.showDistance?gradientRedYellowGreen(Mathf.Clamp((distance / config.safeDistance), 0, 1)):lightGrey;
             bgColor.setAlpha(0.5f);
             c.addPlainPanel("Background", bgPos, GuiContainer.Layer.hud, bgColor, 0, 0, GuiContainer.Blur.medium);
 

@@ -34,8 +34,17 @@
             [JsonProperty(PropertyName = "Minimum distance for starting a hunt")]
             public int safeDistance;
 
+            [JsonProperty(PropertyName = "Show target indicator that he/she is being hunted")]
+            public bool showTargetIndicator;
+
             [JsonProperty(PropertyName = "Show hunter name to target")]
             public bool showHunter;
+
+            [JsonProperty(PropertyName = "Show hunter distance to target")]
+            public bool showDistance;
+
+            [JsonProperty(PropertyName = "Show last seen info to hunter")]
+            public bool showLastSeen;
 
             [JsonProperty(PropertyName = "Broadcast hunt conclusion in global chat")]
             public bool broadcastHunt;
@@ -65,7 +74,10 @@
                 huntDuration = 7200,
                 indicatorRefresh = 5,
                 safeDistance = 500,
+                showTargetIndicator = true,
                 showHunter = true,
+                showDistance = true,
+                showLastSeen = true,
                 broadcastHunt = true,
                 showSteamImage = true,
                 requireReason = true,

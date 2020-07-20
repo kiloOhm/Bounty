@@ -65,6 +65,11 @@
             if (!config.skullCrushing) Unsubscribe("OnItemAction");
         }
 
+        void Unload()
+        {
+            PluginInstance = null;
+        }
+
         object OnServerCommand(ConsoleSystem.Arg arg)
         {
             if (arg == null) return null;

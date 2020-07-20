@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("bounties", "OHM & Bunsen", "2.0.3")]
+    [Info("bounties", "OHM & Bunsen", "2.0.6")]
     [Description("RP Bounty Hunting")]
     partial class Bounties : RustPlugin
     {
@@ -437,8 +437,17 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Minimum distance for starting a hunt")]
             public int safeDistance;
 
+            [JsonProperty(PropertyName = "Show target indicator that he/she is being hunted")]
+            public bool showTargetIndicator;
+
             [JsonProperty(PropertyName = "Show hunter name to target")]
             public bool showHunter;
+
+            [JsonProperty(PropertyName = "Show hunter distance to target")]
+            public bool showDistance;
+
+            [JsonProperty(PropertyName = "Show last seen info to hunter")]
+            public bool showLastSeen;
 
             [JsonProperty(PropertyName = "Broadcast hunt conclusion in global chat")]
             public bool broadcastHunt;
@@ -468,7 +477,10 @@ namespace Oxide.Plugins
                 huntDuration = 7200,
                 indicatorRefresh = 5,
                 safeDistance = 500,
+                showTargetIndicator = true,
                 showHunter = true,
+                showDistance = true,
+                showLastSeen = true,
                 broadcastHunt = true,
                 showSteamImage = true,
                 requireReason = true,
@@ -1272,10 +1284,13 @@ namespace Oxide.Plugins
             c.addText("name", namePos, GuiContainer.Layer.hud, nameText);
 
             //Last Seen
-            Rectangle lastSeenPos = new Rectangle(50, 135, 350, 80, resX, resY, true);
-            string lastSeenString = hunt.lastSeen();
-            GuiText lastSeenText = new GuiText(lastSeenString, 10, opaqueWhite);
-            c.addText("lastSeen", lastSeenPos, GuiContainer.Layer.hud, lastSeenText);
+            if(config.showLastSeen)
+            {
+                Rectangle lastSeenPos = new Rectangle(50, 135, 350, 80, resX, resY, true);
+                string lastSeenString = hunt.lastSeen();
+                GuiText lastSeenText = new GuiText(lastSeenString, 10, opaqueWhite);
+                c.addText("lastSeen", lastSeenPos, GuiContainer.Layer.hud, lastSeenText);
+            }
 
             //Countdown
             Rectangle countdownPos = new Rectangle(50, 215, 350, 35, resX, resY, true);
@@ -1287,6 +1302,7 @@ namespace Oxide.Plugins
 
         public void sendTargetIndicator(BasePlayer player, Hunt hunt)
         {
+            if (!config.showTargetIndicator) return;
 #if DEBUG
             player.ChatMessage($"sendTargetIndicator: {hunt.hunterName} -> {hunt.bounty.targetName}");
 #endif
@@ -1298,7 +1314,7 @@ namespace Oxide.Plugins
             Rectangle bgPos = new Rectangle(50, 250, 350, 100, resX, resY, true);
             float distance = config.safeDistance;
             if(hunt.hunter?.transform != null && hunt.target?.transform != null) distance = Vector3.Distance(hunt.hunter.transform.position, hunt.target.transform.position);
-            GuiColor bgColor = gradientRedYellowGreen(Mathf.Clamp((distance / config.safeDistance), 0, 1));
+            GuiColor bgColor = config.showDistance?gradientRedYellowGreen(Mathf.Clamp((distance / config.safeDistance), 0, 1)):lightGrey;
             bgColor.setAlpha(0.5f);
             c.addPlainPanel("Background", bgPos, GuiContainer.Layer.hud, bgColor, 0, 0, GuiContainer.Blur.medium);
 
@@ -1641,6 +1657,11 @@ namespace Oxide.Plugins
             }
 
             if (!config.skullCrushing) Unsubscribe("OnItemAction");
+        }
+
+        void Unload()
+        {
+            PluginInstance = null;
         }
 
         object OnServerCommand(ConsoleSystem.Arg arg)
